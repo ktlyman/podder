@@ -15,7 +15,7 @@
     "serve:dev": "tsx src/server/api.ts",
     "mcp": "node dist/mcp/server.js",
     "mcp:dev": "tsx src/mcp/server.ts",
-    "lint": "npx claude-md-lint@1 .",
+    "lint": "npx claude-md-lint@1 . --fail-under 95",
     "lint:ts": "tsc --noEmit",
     "test": "node --test dist/**/*.test.js",
     "test:dev": "tsx --test src/**/*.test.ts",

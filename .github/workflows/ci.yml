@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npx claude-md-lint@1 .
+      - run: npx claude-md-lint@1 . --fail-under 95
 
   build:
     name: Build & Type Check
