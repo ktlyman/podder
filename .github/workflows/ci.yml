@@ -15,8 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm install -g @carlrannaberg/cclint
-      - run: cclint --fail-on warning
+      - run: npx claude-md-lint@1 .
 
   build:
     name: Build & Type Check

@@ -15,7 +15,7 @@
     "serve:dev": "tsx src/server/api.ts",
     "mcp": "node dist/mcp/server.js",
     "mcp:dev": "tsx src/mcp/server.ts",
-    "lint": "npx @carlrannaberg/cclint --fail-on warning",
+    "lint": "npx claude-md-lint@1 .",
     "lint:ts": "tsc --noEmit",
     "test": "node --test dist/**/*.test.js",
     "test:dev": "tsx --test src/**/*.test.ts",
@@ -29,7 +29,7 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "@carlrannaberg/cclint": "^0.2.10",
+    "claude-md-lint": "^1.1.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
