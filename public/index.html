@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Podcast Listener - Podscribe</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg-card: #1a1d27;
+      --bg-input: #252836;
+      --border: #2e3247;
+      --text: #e4e4e7;
+      --text-dim: #8b8fa3;
+      --accent: #6c63ff;
+      --accent-hover: #7c74ff;
+      --accent-dim: rgba(108, 99, 255, 0.15);
+      --green: #34d399;
+      --green-dim: rgba(52, 211, 153, 0.15);
+      --red: #f87171;
+      --red-dim: rgba(248, 113, 113, 0.15);
+      --yellow: #fbbf24;
+      --yellow-dim: rgba(251, 191, 36, 0.15);
+      --radius: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* Layout */
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: 220px;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      padding: 20px 0;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-logo {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .sidebar-logo h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .sidebar-logo span {
+      font-size: 11px;
+      color: var(--text-dim);
+      display: block;
+      margin-top: 2px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .nav-item:hover { color: var(--text); background: var(--bg-input); }
+    .nav-item.active { color: var(--accent); background: var(--accent-dim); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .main {
+      flex: 1;
+      padding: 32px 40px;
+      max-width: 960px;
+      min-width: 0;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-input);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-card .value {
+      font-size: 28px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    /* Forms */
+    input, select, textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 14px;
+      width: 100%;
+      outline: none;
+      transition: border 0.15s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+
+    input::placeholder, textarea::placeholder { color: var(--text-dim); }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .input-row input { flex: 1; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group { margin-bottom: 14px; }
+
+    /* Buttons */
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      font-size: 14px;
+      border: none;
+      border-radius: var(--radius);
+      padding: 10px 18px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { background: var(--border); }
+
+    .btn-danger {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .btn-danger:hover { background: rgba(248, 113, 113, 0.25); }
+
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    .btn-icon {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      padding: 4px;
+      display: flex;
+      align-items: center;
+    }
+
+    .btn-icon:hover { color: var(--red); }
+
+    /* Tables / Lists */
+    .list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .list-item:last-child { border-bottom: none; }
+
+    .list-item .name { font-weight: 500; font-size: 14px; }
+
+    .list-item .meta {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .list-container {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    /* Tags */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .tag-accent { background: var(--accent-dim); color: var(--accent); }
+    .tag-green { background: var(--green-dim); color: var(--green); }
+    .tag-yellow { background: var(--yellow-dim); color: var(--yellow); }
+
+    /* Search results */
+    .search-result {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-result:last-child { border-bottom: none; }
+
+    .search-result .title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .search-result .podcast-name {
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .search-result .snippet {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    .search-result .snippet mark {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+
+    .search-result .date {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* Episodes list */
+    .episode-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .episode-item:last-child { border-bottom: none; }
+
+    .episode-item .indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .episode-item .indicator.has-transcript { background: var(--green); }
+    .episode-item .indicator.no-transcript { background: var(--border); }
+
+    .episode-item .info { flex: 1; min-width: 0; }
+
+    .episode-item .ep-title {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .episode-item .ep-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Topic cards */
+    .topic-card {
+      background: var(--bg-input);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .topic-card .topic-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .topic-card .topic-name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .topic-result {
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .topic-result .tr-title {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .topic-result .tr-podcast {
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .topic-result .tr-snippet {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    /* Transcript modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 40px;
+    }
+
+    .modal-overlay.hidden { display: none; }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 800px;
+      width: 100%;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h3 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+    }
+
+    /* Loading / empty states */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-state .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 24px;
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    /* Toast notifications */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 18px;
+      font-size: 13px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      animation: slideIn 0.2s ease-out;
+      max-width: 360px;
+    }
+
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--accent); }
+
+    @keyframes slideIn {
+      from { transform: translateX(30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Page visibility */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 60px; }
+      .sidebar-logo h1, .sidebar-logo span, .nav-item span { display: none; }
+      .nav-item { justify-content: center; padding: 12px; }
+      .main { padding: 20px; }
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-logo">
+        <h1>Podscribe</h1>
+        <span>Podcast Listener</span>
+      </div>
+
+      <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path d="M9 22V12h6v10"/></svg>
+        <span>Dashboard</span>
+      </button>
+
+      <button class="nav-item" data-page="search" onclick="showPage('search')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <span>Search</span>
+      </button>
+
+      <button class="nav-item" data-page="podcasts" onclick="showPage('podcasts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <span>Podcasts</span>
+      </button>
+
+      <button class="nav-item" data-page="topics" onclick="showPage('topics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        <span>Topics</span>
+      </button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+
+      <!-- Dashboard Page -->
+      <div id="page-dashboard" class="page active">
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">Dashboard</h2>
+
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="label">Podcasts</div>
+            <div class="value" id="stat-podcasts">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Episodes</div>
+            <div class="value" id="stat-episodes">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">Transcripts</div>
+            <div class="value" id="stat-transcripts">-</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>
+            Podcast Overview
+            <button class="btn-primary btn-sm" onclick="triggerSync()" id="sync-btn">Sync All</button>
+          </h2>
+          <div id="dashboard-podcasts">
+            <div class="loading-row"><div class="spinner"></div> Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Page -->
+      <div id="page-search" class="page">
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">Search Transcripts</h2>
+
+        <div class="card">
+          <div class="input-row">
+            <input type="text" id="search-input" placeholder="Search across all podcast transcripts..." onkeydown="if(event.key==='Enter')doSearch()">
+            <button class="btn-primary" onclick="doSearch()">Search</button>
+          </div>
+          <div class="input-row">
+            <select id="search-podcast-filter" style="max-width: 200px;">
+              <option value="">All podcasts</option>
+            </select>
+            <input type="date" id="search-after" style="max-width: 170px;" placeholder="After date">
+            <input type="date" id="search-before" style="max-width: 170px;" placeholder="Before date">
+          </div>
+        </div>
+
+        <div id="search-results"></div>
+      </div>
+
+      <!-- Podcasts Page -->
+      <div id="page-podcasts" class="page">
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">Manage Podcasts</h2>
+
+        <div class="card">
+          <h2>Add Podcast</h2>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="add-name" placeholder="e.g. Huberman Lab">
+          </div>
+          <div class="input-row">
+            <div class="form-group" style="flex:1">
+              <label>ID (slug)</label>
+              <input type="text" id="add-id" placeholder="e.g. huberman-lab">
+            </div>
+            <div class="form-group" style="flex:2">
+              <label>RSS Feed URL</label>
+              <input type="text" id="add-feed" placeholder="https://feeds.megaphone.fm/hubermanlab">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Tags (comma-separated)</label>
+            <input type="text" id="add-tags" placeholder="e.g. science, health, neuroscience">
+          </div>
+          <button class="btn-primary" onclick="addPodcast()">Add Podcast</button>
+        </div>
+
+        <div class="card">
+          <h2>Current Podcasts</h2>
+          <div class="list-container" id="podcasts-list">
+            <div class="loading-row"><div class="spinner"></div> Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Topics Page -->
+      <div id="page-topics" class="page">
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">Topic Watchlist</h2>
+
+        <div class="card">
+          <h2>Watch a Topic</h2>
+          <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px;">
+            Add topics you're interested in. The system will surface relevant podcast episodes for each topic.
+          </p>
+          <div class="input-row">
+            <input type="text" id="topic-input" placeholder="e.g. artificial intelligence, sleep optimization, startup fundraising..." onkeydown="if(event.key==='Enter')addTopic()">
+            <button class="btn-primary" onclick="addTopic()">Watch</button>
+          </div>
+        </div>
+
+        <div id="topics-container"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Transcript Modal -->
+  <div class="modal-overlay hidden" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Transcript</h3>
+        <button class="btn-secondary btn-sm" onclick="closeModal()">Close</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script>
+    const API = '';  // Same origin
+
+    // ---- Navigation ----
+    function showPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById(`page-${page}`).classList.add('active');
+      document.querySelector(`[data-page="${page}"]`).classList.add('active');
+
+      // Refresh page data
+      if (page === 'dashboard') loadDashboard();
+      if (page === 'search') loadSearchFilters();
+      if (page === 'podcasts') loadPodcasts();
+      if (page === 'topics') loadTopics();
+    }
+
+    // ---- Toast notifications ----
+    function toast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.textContent = message;
+      container.appendChild(el);
+      setTimeout(() => { el.remove(); }, 4000);
+    }
+
+    // ---- API helpers ----
+    async function api(path, options = {}) {
+      const res = await fetch(`${API}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    // ---- Dashboard ----
+    async function loadDashboard() {
+      try {
+        const stats = await api('/api/stats');
+        document.getElementById('stat-podcasts').textContent = stats.totalPodcasts;
+        document.getElementById('stat-episodes').textContent = stats.totalEpisodes;
+        document.getElementById('stat-transcripts').textContent = stats.totalTranscripts;
+
+        const container = document.getElementById('dashboard-podcasts');
+        if (stats.podcasts.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">&#127911;</div>
+              <p>No podcasts tracked yet.</p>
+              <p style="margin-top:8px"><button class="btn-primary btn-sm" onclick="showPage('podcasts')">Add a podcast</button></p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = stats.podcasts.map(p => {
+          const pct = p.totalEpisodes > 0
+            ? Math.round((p.episodesWithTranscripts / p.totalEpisodes) * 100)
+            : 0;
+          const dateRange = p.oldestEpisode
+            ? `${p.oldestEpisode.split('T')[0]} - ${(p.newestEpisode || '').split('T')[0]}`
+            : 'No episodes';
+          return `
+            <div class="list-item" style="cursor:pointer" onclick="viewEpisodes('${p.podcastId}', '${esc(p.podcastName)}')">
+              <div style="flex:1;min-width:0">
+                <div class="name">${esc(p.podcastName)}</div>
+                <div class="meta">${dateRange}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:14px;font-weight:600">${p.totalEpisodes} eps</div>
+                <div class="meta">
+                  <span class="tag ${pct > 50 ? 'tag-green' : pct > 0 ? 'tag-yellow' : 'tag-accent'}">${pct}% transcribed</span>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function triggerSync() {
+      const btn = document.getElementById('sync-btn');
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+      try {
+        const result = await api('/api/sync', { method: 'POST' });
+        toast(`Sync started for ${result.count} podcast(s)`, 'success');
+      } catch (err) {
+        toast(err.message, 'error');
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = 'Sync All';
+          loadDashboard();
+        }, 3000);
+      }
+    }
+
+    // ---- Episodes viewer (inline on dashboard) ----
+    async function viewEpisodes(podcastId, podcastName) {
+      try {
+        const episodes = await api(`/api/episodes?podcast=${encodeURIComponent(podcastId)}&limit=50`);
+        const container = document.getElementById('dashboard-podcasts');
+
+        const backBtn = `<div style="margin-bottom:16px">
+          <button class="btn-secondary btn-sm" onclick="loadDashboard()">&larr; Back</button>
+          <span style="margin-left:8px;font-weight:600">${esc(podcastName)}</span>
+          <span class="tag tag-accent" style="margin-left:8px">${episodes.length} episodes</span>
+        </div>`;
+
+        if (episodes.length === 0) {
+          container.innerHTML = backBtn + `<div class="empty-state"><p>No episodes synced yet. Run a sync first.</p></div>`;
+          return;
+        }
+
+        container.innerHTML = backBtn + `<div class="list-container">${
+          episodes.map(ep => `
+            <div class="episode-item">
+              <div class="indicator ${ep.hasTranscript ? 'has-transcript' : 'no-transcript'}"></div>
+              <div class="info">
+                <div class="ep-title">${esc(ep.title)}</div>
+                <div class="ep-meta">${ep.publishedAt.split('T')[0]}${ep.episodeUrl ? ` &middot; <a href="${esc(ep.episodeUrl)}" target="_blank" style="color:var(--accent)">Link</a>` : ''}</div>
+              </div>
+              ${ep.hasTranscript ? `<button class="btn-secondary btn-sm" onclick="event.stopPropagation()">Transcript</button>` : '<span class="tag tag-yellow">No transcript</span>'}
+            </div>`).join('')
+        }</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--text-dim)">
+          <span class="indicator has-transcript" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green)"></span> has transcript &nbsp;
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--border)"></span> no transcript
+        </div>`;
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    // ---- Search ----
+    async function loadSearchFilters() {
+      try {
+        const podcasts = await api('/api/podcasts');
+        const select = document.getElementById('search-podcast-filter');
+        const current = select.value;
+        select.innerHTML = '<option value="">All podcasts</option>' +
+          podcasts.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+        select.value = current;
+      } catch { /* ignore */ }
+    }
+
+    async function doSearch() {
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+
+      const podcast = document.getElementById('search-podcast-filter').value;
+      const after = document.getElementById('search-after').value;
+      const before = document.getElementById('search-before').value;
+
+      const params = new URLSearchParams({ q: query, limit: '20' });
+      if (podcast) params.set('podcast', podcast);
+      if (after) params.set('after', after);
+      if (before) params.set('before', before);
+
+      const container = document.getElementById('search-results');
+      container.innerHTML = '<div class="loading-row"><div class="spinner"></div> Searching...</div>';
+
+      try {
+        const result = await api(`/api/search?${params}`);
+
+        if (result.sources.length === 0) {
+          container.innerHTML = `<div class="card"><div class="empty-state"><p>No results found for "${esc(query)}".</p></div></div>`;
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="card">
+            <h2 style="font-size:13px;color:var(--text-dim);font-weight:400">${esc(result.answer)}</h2>
+            <div class="list-container" style="margin-top:12px">
+              ${result.sources.map(s => `
+                <div class="search-result">
+                  <div class="title">${esc(s.episodeTitle)}</div>
+                  <div class="podcast-name">${esc(s.podcastName)}</div>
+                  <div class="snippet">${formatSnippet(s.snippet)}</div>
+                  <div class="date">${s.publishedAt.split('T')[0]}${s.episodeUrl ? ` &middot; <a href="${esc(s.episodeUrl)}" target="_blank" style="color:var(--accent)">Episode link</a>` : ''}</div>
+                </div>`).join('')}
+            </div>
+          </div>`;
+      } catch (err) {
+        container.innerHTML = `<div class="card"><div class="empty-state"><p style="color:var(--red)">${esc(err.message)}</p></div></div>`;
+      }
+    }
+
+    function formatSnippet(snippet) {
+      return esc(snippet)
+        .replace(/&gt;&gt;&gt;&gt;/g, '<mark>')
+        .replace(/&lt;&lt;&lt;&lt;/g, '</mark>');
+    }
+
+    // ---- Podcasts management ----
+    async function loadPodcasts() {
+      try {
+        const podcasts = await api('/api/podcasts');
+        const container = document.getElementById('podcasts-list');
+
+        if (podcasts.length === 0) {
+          container.innerHTML = '<div class="empty-state"><p>No podcasts added yet. Use the form above to add one.</p></div>';
+          return;
+        }
+
+        container.innerHTML = podcasts.map(p => `
+          <div class="list-item">
+            <div style="flex:1;min-width:0">
+              <div class="name">${esc(p.name)}</div>
+              <div class="meta">${esc(p.feedUrl)}</div>
+              <div style="margin-top:4px">
+                ${(p.tags || []).map(t => `<span class="tag tag-accent">${esc(t)}</span>`).join(' ')}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn-secondary btn-sm" onclick="syncOnePodcast('${esc(p.id)}')">Sync</button>
+              <button class="btn-danger btn-sm" onclick="removePodcast('${esc(p.id)}')">Remove</button>
+            </div>
+          </div>`).join('');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function addPodcast() {
+      const name = document.getElementById('add-name').value.trim();
+      const id = document.getElementById('add-id').value.trim();
+      const feedUrl = document.getElementById('add-feed').value.trim();
+      const tagsRaw = document.getElementById('add-tags').value.trim();
+      const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+      if (!name || !id || !feedUrl) {
+        toast('Name, ID, and Feed URL are required', 'error');
+        return;
+      }
+
+      try {
+        await api('/api/podcasts', {
+          method: 'POST',
+          body: JSON.stringify({ id, name, feedUrl, tags }),
+        });
+        toast(`Added "${name}"`, 'success');
+        document.getElementById('add-name').value = '';
+        document.getElementById('add-id').value = '';
+        document.getElementById('add-feed').value = '';
+        document.getElementById('add-tags').value = '';
+        loadPodcasts();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function removePodcast(id) {
+      if (!confirm(`Remove podcast "${id}"?`)) return;
+      try {
+        await api(`/api/podcasts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        toast(`Removed "${id}"`, 'success');
+        loadPodcasts();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function syncOnePodcast(id) {
+      try {
+        await api('/api/sync', {
+          method: 'POST',
+          body: JSON.stringify({ podcastId: id }),
+        });
+        toast(`Sync started for "${id}"`, 'success');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    // ---- Auto-generate slug from name ----
+    document.getElementById('add-name')?.addEventListener('input', function () {
+      const idField = document.getElementById('add-id');
+      if (!idField.dataset.userEdited) {
+        idField.value = this.value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '');
+      }
+    });
+    document.getElementById('add-id')?.addEventListener('input', function () {
+      this.dataset.userEdited = 'true';
+    });
+
+    // ---- Topics ----
+    async function loadTopics() {
+      const container = document.getElementById('topics-container');
+      container.innerHTML = '<div class="loading-row"><div class="spinner"></div> Loading topics...</div>';
+
+      try {
+        const topics = await api('/api/topics');
+
+        if (topics.length === 0) {
+          container.innerHTML = `<div class="card"><div class="empty-state">
+            <div class="icon">&#127919;</div>
+            <p>No topics watched yet.</p>
+            <p style="margin-top:8px;font-size:13px;color:var(--text-dim)">Add a topic above to start tracking podcast mentions.</p>
+          </div></div>`;
+          return;
+        }
+
+        // Fetch results for all topics
+        let results = {};
+        try {
+          results = await api('/api/topics/results?limit=3');
+        } catch { /* no results yet, that's ok */ }
+
+        container.innerHTML = topics.map(topic => {
+          const topicResults = results[topic];
+          const sources = topicResults?.sources || [];
+
+          return `
+            <div class="topic-card">
+              <div class="topic-header">
+                <div class="topic-name">${esc(topic)}</div>
+                <div>
+                  <span class="tag ${sources.length > 0 ? 'tag-green' : 'tag-yellow'}">${sources.length} result(s)</span>
+                  <button class="btn-danger btn-sm" style="margin-left:8px" onclick="removeTopic('${esc(topic)}')">Remove</button>
+                </div>
+              </div>
+              ${sources.length === 0
+                ? '<div style="color:var(--text-dim);font-size:13px">No matching episodes found. Sync more podcasts to get results.</div>'
+                : sources.map(s => `
+                  <div class="topic-result">
+                    <div class="tr-title">${esc(s.episodeTitle)}</div>
+                    <div class="tr-podcast">${esc(s.podcastName)} &middot; ${s.publishedAt.split('T')[0]}</div>
+                    <div class="tr-snippet">${formatSnippet(s.snippet)}</div>
+                  </div>`).join('')}
+            </div>`;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = `<div class="card"><div class="empty-state"><p style="color:var(--red)">${esc(err.message)}</p></div></div>`;
+      }
+    }
+
+    async function addTopic() {
+      const input = document.getElementById('topic-input');
+      const topic = input.value.trim();
+      if (!topic) return;
+
+      try {
+        await api('/api/topics', {
+          method: 'POST',
+          body: JSON.stringify({ topic }),
+        });
+        input.value = '';
+        toast(`Watching "${topic}"`, 'success');
+        loadTopics();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    async function removeTopic(topic) {
+      try {
+        await api('/api/topics', {
+          method: 'DELETE',
+          body: JSON.stringify({ topic }),
+        });
+        toast(`Removed "${topic}"`, 'success');
+        loadTopics();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    // ---- Modal ----
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+    }
+
+    // ---- Utility ----
+    function esc(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = String(str);
+      return div.innerHTML;
+    }
+
+    // ---- Init ----
+    loadDashboard();
+  </script>
+</body>
+</html>

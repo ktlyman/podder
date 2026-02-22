@@ -1,0 +1,32 @@
+[
+  {
+    "id": "huberman-lab",
+    "name": "Huberman Lab",
+    "feedUrl": "https://feeds.megaphone.fm/hubermanlab",
+    "tags": ["science", "health", "neuroscience"]
+  },
+  {
+    "id": "lex-fridman",
+    "name": "Lex Fridman Podcast",
+    "feedUrl": "https://lexfridman.com/feed/podcast/",
+    "tags": ["technology", "science", "philosophy"]
+  },
+  {
+    "id": "all-in",
+    "name": "All-In Podcast",
+    "feedUrl": "https://feeds.megaphone.fm/all-in-with-chamath-jason-sacks-and-friedberg",
+    "tags": ["technology", "business", "politics"]
+  },
+  {
+    "id": "acquired",
+    "name": "Acquired",
+    "feedUrl": "https://feeds.acquired.fm/acquired",
+    "tags": ["business", "technology", "history"]
+  },
+  {
+    "id": "dwarkesh",
+    "name": "Dwarkesh Podcast",
+    "feedUrl": "https://feeds.megaphone.fm/dwarkeshpatel",
+    "tags": ["technology", "science", "interviews"]
+  }
+]
