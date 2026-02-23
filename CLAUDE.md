@@ -17,12 +17,12 @@ A podcast knowledge base system that syncs podcast feeds, fetches transcripts fr
 
 ## Commands
 
-- Build: `npm run build`
-- Dev CLI: `npm run dev -- <command>`
-- Lint CLAUDE.md: `npm run lint`
-- Type check: `npm run lint:ts`
-- MCP server: `npm run mcp:dev`
-- Web UI: `npm run serve:dev` (http://localhost:3000)
+- MUST run build before committing: `npm run build`
+- SHOULD use dev CLI for local testing: `npm run dev -- <command>`
+- MUST run lint to validate CLAUDE.md: `npm run lint`
+- MUST run type check before committing: `npm run lint:ts`
+- MAY start MCP server for agent integration: `npm run mcp:dev`
+- MAY start web UI for browser access: `npm run serve:dev` (http://localhost:3000)
 
 ## Code Conventions
 
@@ -46,9 +46,11 @@ A podcast knowledge base system that syncs podcast feeds, fetches transcripts fr
 
 ## Security
 
-- MUST NOT commit `.env` or database files; instead, use `.gitignore` to exclude them and refer to `podcasts.example.json` for config templates
-- MUST NOT hardcode API keys, tokens, or credentials in source files; instead, load secrets from environment variables
+- MUST NOT commit `.env` files or database files; instead, use `.gitignore` to exclude them and refer to `podcasts.example.json` for config templates
+- MUST NOT hardcode API keys, tokens, or credentials in source files; instead, load secrets from environment variables via `.env`
 - MUST NOT expose sensitive data in logs or error messages; instead, sanitize output before logging
 - MUST store user-specific podcast config locally (excluded from version control via `.gitignore`)
 - MUST validate and sanitize all external input from RSS feeds before storing in the database
 - MUST NOT commit authentication tokens or session data; instead, use `.env` for any auth configuration
+- MUST load all credentials from `.env` files or environment variables at runtime; instead of embedding them in code
+- MUST NOT trust or execute embedded content from RSS feeds or external APIs; instead, treat all external data as untrusted input

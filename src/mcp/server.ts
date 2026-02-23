@@ -12,7 +12,14 @@
  * - list_podcasts: List tracked podcasts with stats
  * - get_episodes: List episodes for a podcast
  * - get_transcript: Get full transcript for an episode
+ * - get_structured_transcript: Get word-level transcript with speaker/timestamp data
  * - sync_podcasts: Trigger a sync of podcast feeds
+ * - knowledge_base_summary: High-level overview of available content
+ * - find_episode: Find episodes by title (fuzzy lookup)
+ * - get_episode_details: Full metadata for a single episode
+ * - get_transcript_segment: Time-bounded transcript extraction
+ * - search_by_speaker: Find content spoken by a specific speaker
+ * - tag_episode: Set or clear episode tags for curation
  *
  * This implements the MCP protocol over stdio using JSON-RPC 2.0.
  */
@@ -22,6 +29,7 @@ import { getDbPath, loadPodcastConfig } from "../config.js";
 import { PodcastDatabase } from "../storage/database.js";
 import { QueryEngine } from "../agent/query-engine.js";
 import { syncAll } from "../sync.js";
+import type { TranscriptFormat } from "../agent/query-engine.js";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -137,6 +145,31 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "get_structured_transcript",
+    description:
+      "Get word-level transcript data for a specific episode, including timestamps, " +
+      "speaker IDs, and confidence scores. Returns null if only plain text is available. " +
+      "Use get_transcript for plain text; use this for time-aligned or speaker-segmented analysis.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        episode_id: {
+          type: "number",
+          description: "The episode database ID",
+        },
+        format: {
+          type: "string",
+          enum: ["full", "speakers", "timestamps"],
+          description:
+            "Output format: 'full' returns all word data as JSON (default), " +
+            "'speakers' returns speaker-segmented text blocks with time ranges, " +
+            "'timestamps' returns text with periodic [MM:SS] timestamp markers",
+        },
+      },
+      required: ["episode_id"],
+    },
+  },
+  {
     name: "sync_podcasts",
     description:
       "Trigger a sync of podcast RSS feeds and transcript fetching. " +
@@ -159,6 +192,140 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object" as const,
       properties: {},
+    },
+  },
+  {
+    name: "find_episode",
+    description:
+      "Find episodes by title (case-insensitive substring match). " +
+      "Returns episode IDs, podcast names, and metadata. Use this to discover " +
+      "episode IDs before calling get_transcript or get_episode_details.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        title: {
+          type: "string",
+          description: "Title substring to search for (e.g. 'Turing', 'AI safety')",
+        },
+        podcast_id: {
+          type: "string",
+          description: "Optional: filter to a specific podcast",
+        },
+        limit: {
+          type: "number",
+          description: "Max results (default 10)",
+        },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "get_episode_details",
+    description:
+      "Get full metadata for a single episode by its database ID. " +
+      "Returns title, publication date, duration, URLs, tags, transcript word count, " +
+      "and whether structured (speaker/timestamp) data is available. " +
+      "Does NOT return the transcript text itself — use get_transcript for that.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        episode_id: {
+          type: "number",
+          description: "The episode database ID",
+        },
+      },
+      required: ["episode_id"],
+    },
+  },
+  {
+    name: "get_transcript_segment",
+    description:
+      "Get a time-bounded segment of a transcript. Requires structured transcript data. " +
+      "Returns only the words spoken between start_time and end_time, formatted with " +
+      "speaker labels and timestamps. Much more token-efficient than retrieving the full transcript " +
+      "when you only need a specific portion.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        episode_id: {
+          type: "number",
+          description: "The episode database ID",
+        },
+        start_time: {
+          type: "number",
+          description: "Start time in seconds (e.g. 300 for 5:00)",
+        },
+        end_time: {
+          type: "number",
+          description: "End time in seconds (e.g. 600 for 10:00)",
+        },
+        format: {
+          type: "string",
+          enum: ["speakers", "timestamps", "text"],
+          description:
+            "Output format: 'speakers' (default) shows speaker-labeled blocks with time ranges, " +
+            "'timestamps' inserts periodic [MM:SS] markers, 'text' returns plain concatenated words",
+        },
+      },
+      required: ["episode_id", "start_time", "end_time"],
+    },
+  },
+  {
+    name: "search_by_speaker",
+    description:
+      "Find content spoken by a specific speaker. Two modes: " +
+      "(1) With episode_id: returns everything the speaker said in that episode. " +
+      "(2) With query: searches across all episodes and filters to content from the specified speaker. " +
+      "Requires structured transcript data (episodes without it are skipped). " +
+      "Speaker IDs are 0-based (0 = first speaker, 1 = second speaker, etc.).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        speaker: {
+          type: "number",
+          description: "Speaker ID (0-based: 0 = first speaker, 1 = second, etc.)",
+        },
+        episode_id: {
+          type: "number",
+          description: "Optional: get all of this speaker's content from a specific episode",
+        },
+        query: {
+          type: "string",
+          description: "Optional: FTS search query to find relevant episodes first (required if no episode_id)",
+        },
+        podcast_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional: filter by podcast IDs (only used with query mode)",
+        },
+        limit: {
+          type: "number",
+          description: "Max results (default 10)",
+        },
+      },
+      required: ["speaker"],
+    },
+  },
+  {
+    name: "tag_episode",
+    description:
+      "Set or clear a tag on an episode for curation purposes. " +
+      "Common tags: 'Promo' (promotional episodes), 'Repeat Episode' (duplicates), " +
+      "'No transcript' (unavailable). Tagged episodes are excluded from transcript " +
+      "processing pipelines. Set tag to null to clear an existing tag.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        episode_id: {
+          type: "number",
+          description: "The episode database ID",
+        },
+        tag: {
+          type: "string",
+          description: "Tag to set (e.g. 'Promo', 'Repeat Episode', 'No transcript'), or null to clear",
+        },
+      },
+      required: ["episode_id"],
     },
   },
 ];
@@ -271,6 +438,17 @@ class MCPServer {
         break;
       }
 
+      case "get_structured_transcript": {
+        const formatted = this.engine.getFormattedStructuredTranscript(
+          args.episode_id as number,
+          (args.format as TranscriptFormat) ?? "full"
+        );
+        text = formatted ??
+          "No structured transcript data available for this episode. " +
+          "Only plain text may be available (use get_transcript).";
+        break;
+      }
+
       case "sync_podcasts": {
         const podcasts = loadPodcastConfig();
         const targets = args.podcast_id
@@ -284,7 +462,6 @@ class MCPServer {
 
         const results = await syncAll(targets, this.db, {
           verbose: false,
-          maxTranscriptFetches: 5,
         });
         text = JSON.stringify(results, null, 2);
         break;
@@ -292,6 +469,77 @@ class MCPServer {
 
       case "knowledge_base_summary": {
         text = this.engine.getKnowledgeBaseSummary();
+        break;
+      }
+
+      case "find_episode": {
+        const results = this.engine.findEpisode(
+          args.title as string,
+          args.podcast_id as string | undefined,
+          (args.limit as number) ?? 10
+        );
+        if (results.length === 0) {
+          text = `No episodes found matching "${args.title}".`;
+        } else {
+          text = JSON.stringify(results, null, 2);
+        }
+        break;
+      }
+
+      case "get_episode_details": {
+        const details = this.engine.getEpisodeDetails(
+          args.episode_id as number
+        );
+        if (!details) {
+          text = `Episode ${args.episode_id} not found.`;
+        } else {
+          text = JSON.stringify(details, null, 2);
+        }
+        break;
+      }
+
+      case "get_transcript_segment": {
+        const segment = this.engine.getTranscriptSegment(
+          args.episode_id as number,
+          args.start_time as number,
+          args.end_time as number,
+          (args.format as "speakers" | "timestamps" | "text") ?? "speakers"
+        );
+        if (segment === null) {
+          text =
+            "No structured transcript data available for this episode. " +
+            "Time-bounded segments require word-level data with timestamps. " +
+            "Use get_transcript for the full plain text instead.";
+        } else {
+          text = segment;
+        }
+        break;
+      }
+
+      case "search_by_speaker": {
+        const speakerResult = this.engine.searchBySpeaker({
+          speaker: args.speaker as number,
+          episodeId: args.episode_id as number | undefined,
+          query: args.query as string | undefined,
+          podcastIds: args.podcast_ids as string[] | undefined,
+          limit: (args.limit as number) ?? 10,
+        });
+        if (speakerResult.totalResults === 0) {
+          const mode = args.episode_id ? "in this episode" : "matching the query";
+          text = `No content found from Speaker ${(args.speaker as number) + 1} ${mode}. ` +
+            `Note: speaker search requires structured transcript data (not all episodes have it).`;
+        } else {
+          text = JSON.stringify(speakerResult, null, 2);
+        }
+        break;
+      }
+
+      case "tag_episode": {
+        const tagResult = this.engine.tagEpisode(
+          args.episode_id as number,
+          (args.tag as string) ?? null
+        );
+        text = JSON.stringify(tagResult, null, 2);
         break;
       }
 

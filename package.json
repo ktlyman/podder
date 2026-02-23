@@ -25,13 +25,14 @@
   "dependencies": {
     "better-sqlite3": "^11.7.0",
     "commander": "^13.1.0",
+    "compress-json": "^3.4.0",
     "fast-xml-parser": "^5.0.0",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
-    "claude-md-lint": "^1.1.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.0.0",
+    "claude-md-lint": "^1.1.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },

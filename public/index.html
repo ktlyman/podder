@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Podcast Listener - Podscribe</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='system-ui,sans-serif' font-size='26' font-weight='700' fill='%238b8fa3'>P</text></svg>">
   <style>
     :root {
       --bg: #0f1117;
@@ -270,6 +271,7 @@
     .tag-accent { background: var(--accent-dim); color: var(--accent); }
     .tag-green { background: var(--green-dim); color: var(--green); }
     .tag-yellow { background: var(--yellow-dim); color: var(--yellow); }
+    .tag-red { background: var(--red-dim); color: var(--red); }
 
     /* Search results */
     .search-result {
@@ -437,6 +439,32 @@
       white-space: pre-wrap;
     }
 
+    .modal-body.enriched { white-space: normal; }
+
+    .transcript-block {
+      margin-bottom: 20px;
+      padding-left: 12px;
+      border-left: 3px solid var(--border);
+    }
+
+    .transcript-speaker {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .transcript-speaker .ts {
+      font-weight: 400;
+      color: var(--text-dim);
+      margin-left: 6px;
+    }
+
+    .transcript-text {
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+
     /* Loading / empty states */
     .empty-state {
       text-align: center;
@@ -507,6 +535,154 @@
     .page { display: none; }
     .page.active { display: block; }
 
+    /* Sync progress panel */
+    .sync-progress {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .sync-progress .sp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .sync-progress .sp-title {
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sp-bar-track {
+      background: var(--bg);
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+
+    .sp-bar-fill {
+      background: var(--accent);
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .sp-current {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sp-current .sp-podcast-name {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .sp-current .sp-phase {
+      font-size: 13px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sp-completed {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sp-completed-item {
+      font-size: 12px;
+      color: var(--text-dim);
+      padding: 2px 0;
+    }
+
+    .sp-completed-item .sp-check { color: var(--green); }
+
+    /* Queue display */
+    .queue-stats {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+    }
+
+    .queue-stat {
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--text-dim);
+    }
+
+    .queue-stat .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .queue-stat .count {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .queue-episodes {
+      max-height: 340px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-top: 8px;
+    }
+
+    .queue-ep {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .queue-ep:last-child { border-bottom: none; }
+
+    .queue-ep .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .queue-ep .ep-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-ep .ep-state {
+      font-size: 11px;
+      flex-shrink: 0;
+      color: var(--text-dim);
+    }
+
+    .queue-ep-summary {
+      color: var(--text-dim);
+      font-style: italic;
+      justify-content: center;
+      padding: 8px 12px;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .sidebar { width: 60px; }
@@ -559,13 +735,17 @@
             <div class="label">Podcasts</div>
             <div class="value" id="stat-podcasts">-</div>
           </div>
-          <div class="stat-card">
-            <div class="label">Episodes</div>
-            <div class="value" id="stat-episodes">-</div>
+          <div class="stat-card" style="display:flex;align-items:flex-start;justify-content:space-between">
+            <div>
+              <div class="label">Episodes</div>
+              <div class="value" id="stat-episodes">-</div>
+            </div>
+            <div id="stat-tag-counts" style="font-size:11px;color:var(--text-dim);text-align:right;margin-top:2px"></div>
           </div>
           <div class="stat-card">
             <div class="label">Transcripts</div>
             <div class="value" id="stat-transcripts">-</div>
+            <div id="stat-enriched" style="font-size:11px;color:var(--text-dim);margin-top:2px"></div>
           </div>
         </div>
 
@@ -573,7 +753,10 @@
           <h2>
             Podcast Overview
             <button class="btn-primary btn-sm" onclick="triggerSync()" id="sync-btn">Sync All</button>
+            <button class="btn-secondary btn-sm request-btn-toggle" onclick="requestTranscripts()" id="request-btn" style="margin-left:4px">Request Transcripts</button>
+            <button class="btn-secondary btn-sm enrich-btn-toggle" onclick="requestEnrichment()" id="enrich-btn" style="margin-left:4px">Request Enriched Data</button>
           </h2>
+          <div id="sync-progress"></div>
           <div id="dashboard-podcasts">
             <div class="loading-row"><div class="spinner"></div> Loading...</div>
           </div>
@@ -621,9 +804,15 @@
               <input type="text" id="add-feed" placeholder="https://feeds.megaphone.fm/hubermanlab">
             </div>
           </div>
-          <div class="form-group">
-            <label>Tags (comma-separated)</label>
-            <input type="text" id="add-tags" placeholder="e.g. science, health, neuroscience">
+          <div class="input-row">
+            <div class="form-group" style="flex:2">
+              <label>Tags (comma-separated)</label>
+              <input type="text" id="add-tags" placeholder="e.g. science, health, neuroscience">
+            </div>
+            <div class="form-group" style="flex:1">
+              <label>Podscribe Series ID</label>
+              <input type="text" id="add-podscribe-id" placeholder="e.g. 188 (optional)">
+            </div>
           </div>
           <button class="btn-primary" onclick="addPodcast()">Add Podcast</button>
         </div>
@@ -717,6 +906,25 @@
         document.getElementById('stat-episodes').textContent = stats.totalEpisodes;
         document.getElementById('stat-transcripts').textContent = stats.totalTranscripts;
 
+        // Show enriched transcript count
+        const enrichedEl = document.getElementById('stat-enriched');
+        const enriched = stats.enrichedTranscripts || 0;
+        enrichedEl.innerHTML = enriched > 0
+          ? `<span style="color:var(--green)">${enriched}</span> enriched`
+          : `<span style="color:var(--text-dim)">${enriched} enriched</span>`;
+
+        // Render tag counts in Episodes stat card
+        const tagEl = document.getElementById('stat-tag-counts');
+        if (stats.tagCounts && Object.keys(stats.tagCounts).length > 0) {
+          const order = ['No transcript', 'Repeat Episode', 'Promo'];
+          const entries = order
+            .filter(t => stats.tagCounts[t])
+            .map(t => `<div style="display:flex;justify-content:space-between;gap:12px"><span>${esc(t)}</span><span style="font-weight:600;color:${t === 'No transcript' ? 'var(--yellow)' : 'var(--red)'}">${stats.tagCounts[t]}</span></div>`);
+          tagEl.innerHTML = entries.join('');
+        } else {
+          tagEl.innerHTML = '';
+        }
+
         const container = document.getElementById('dashboard-podcasts');
         if (stats.podcasts.length === 0) {
           container.innerHTML = `
@@ -754,34 +962,390 @@
       }
     }
 
+    // ---- Sync Progress Tracker (SSE) ----
+    const syncTracker = {
+      es: null,
+      state: null,
+      _rafPending: false,
+
+      connect() {
+        if (this.es) return;
+        this.es = new EventSource('/api/sync/events');
+        this.es.onmessage = (e) => {
+          try { this.handleEvent(JSON.parse(e.data)); } catch (err) { console.error('SSE handler error:', err); }
+        };
+        this.es.onerror = () => { this.scheduleRender(); };
+      },
+
+      disconnect() {
+        if (this.es) { this.es.close(); this.es = null; }
+      },
+
+      _ensureState(evt) {
+        // Lazily create state if we connected mid-sync
+        if (!this.state) {
+          this.state = { totalPodcasts: evt.totalPodcasts || 0, podcastIds: [], currentPodcast: null, currentPhase: null, completed: [], startedAt: Date.now(), episodes: new Map() };
+        }
+      },
+
+      handleEvent(evt) {
+        const PHASE_LABELS = { feed: 'Fetching feed', status: 'Checking statuses', download: 'Downloading transcripts', fallback: 'Adapter chain', request: 'Requesting transcripts', poll: 'Polling for completion' };
+        switch (evt.type) {
+          case 'connected':
+            if (evt.syncInProgress) {
+              this._ensureState(evt);
+            } else {
+              this.state = null;
+            }
+            break;
+          case 'sync:start':
+            this.state = { totalPodcasts: evt.totalPodcasts, podcastIds: evt.podcastIds, currentPodcast: null, currentPhase: null, completed: [], startedAt: Date.now(), episodes: new Map() };
+            break;
+          case 'podcast:start':
+            this._ensureState(evt);
+            this.state.totalPodcasts = evt.totalPodcasts;
+            this.state.currentPodcast = { id: evt.podcastId, name: evt.podcastName, index: evt.podcastIndex, total: evt.totalPodcasts };
+            this.state.currentPhase = null;
+            break;
+          case 'phase:start':
+            this._ensureState(evt);
+            if (!this.state.currentPodcast) this.state.currentPodcast = { id: evt.podcastId, name: evt.podcastId, index: 0, total: 0 };
+            this.state.currentPhase = { phase: evt.phase, label: PHASE_LABELS[evt.phase] || evt.phase, completed: 0, total: evt.total, message: evt.message };
+            break;
+          case 'phase:progress':
+            this._ensureState(evt);
+            if (!this.state.currentPhase) {
+              this.state.currentPhase = { phase: evt.phase, label: PHASE_LABELS[evt.phase] || evt.phase, completed: evt.completed, total: evt.total };
+            } else {
+              this.state.currentPhase.completed = evt.completed;
+              this.state.currentPhase.total = evt.total;
+            }
+            if (!this.state.currentPodcast) this.state.currentPodcast = { id: evt.podcastId, name: evt.podcastId, index: 0, total: 0 };
+            break;
+          case 'phase:complete':
+            if (this.state?.currentPhase) this.state.currentPhase.summary = evt.summary;
+            break;
+          case 'podcast:complete':
+            this._ensureState(evt);
+            this.state.completed.push({ id: evt.podcastId, name: evt.podcastName, result: evt.result });
+            break;
+          case 'sync:complete':
+            this.state = null;
+            this.disconnect();
+            this.scheduleRender();
+            const syncBtn = document.getElementById('sync-btn');
+            if (syncBtn) { syncBtn.disabled = false; syncBtn.textContent = 'Sync All'; }
+            document.querySelectorAll('.request-btn-toggle').forEach(b => {
+              b.disabled = false; b.textContent = 'Request Transcripts';
+            });
+            _requestingTranscripts = false;
+            document.querySelectorAll('.enrich-btn-toggle').forEach(b => {
+              b.disabled = false; b.textContent = 'Request Enriched Data';
+            });
+            _enriching = false;
+            const totalNew = evt.results.reduce((s, r) => s + r.newTranscripts, 0);
+            if (evt.durationMs > 0) {
+              toast(`Sync complete in ${(evt.durationMs / 1000).toFixed(1)}s — ${totalNew} new transcripts`, 'success');
+            } else {
+              toast(`Request complete — ${totalNew} new transcripts`, 'success');
+            }
+            loadDashboard();
+            return;
+          case 'episode:status':
+            this._ensureState(evt);
+            this.state.episodes.set(evt.guid, {
+              title: evt.title,
+              podcastId: evt.podcastId,
+              state: evt.state,
+              detail: evt.detail || '',
+            });
+            break;
+          case 'sync:error':
+            toast(`Sync error: ${evt.message}`, 'error');
+            break;
+        }
+        this.scheduleRender();
+      },
+
+      scheduleRender() {
+        if (this._rafPending) return;
+        this._rafPending = true;
+        setTimeout(() => { this._rafPending = false; this.render(); }, 50);
+      },
+
+      render() {
+        const el = document.getElementById('sync-progress');
+        if (!el) return;
+        if (!this.state) { el.innerHTML = ''; return; }
+        const s = this.state;
+
+        // Queue mode: episode-level tracking active
+        if (s.episodes && s.episodes.size > 0) {
+          this._renderQueue(el, s);
+          return;
+        }
+
+        // Standard sync render
+        const doneCount = s.completed.length;
+        const pct = s.totalPodcasts > 0 ? Math.round((doneCount / s.totalPodcasts) * 100) : 0;
+
+        let currentHtml = '';
+        if (s.currentPodcast) {
+          let phaseHtml = '';
+          if (s.currentPhase) {
+            const p = s.currentPhase;
+            const phasePct = p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0;
+            phaseHtml = `<div class="sp-phase">
+              <span>${esc(p.label)}</span>
+              ${p.total > 0 ? `<span>${p.completed}/${p.total}</span>` : '<div class="spinner" style="width:14px;height:14px;border-width:2px"></div>'}
+            </div>
+            ${p.total > 0 ? `<div class="sp-bar-track"><div class="sp-bar-fill" style="width:${phasePct}%;background:var(--green)"></div></div>` : ''}`;
+          }
+          currentHtml = `<div class="sp-current">
+            <div class="sp-podcast-name">${esc(s.currentPodcast.name)}</div>
+            ${phaseHtml}
+          </div>`;
+        }
+
+        let completedHtml = '';
+        if (s.completed.length > 0) {
+          completedHtml = `<div class="sp-completed">
+            ${s.completed.map(c => {
+              const r = c.result;
+              const parts = [];
+              if (r.newEpisodes > 0) parts.push(`${r.newEpisodes} new eps`);
+              if (r.newTranscripts > 0) parts.push(`${r.newTranscripts} transcripts`);
+              const detail = parts.length > 0 ? parts.join(', ') : 'up to date';
+              return `<div class="sp-completed-item"><span class="sp-check">&#10003;</span> ${esc(c.name)} &mdash; ${detail}</div>`;
+            }).join('')}
+          </div>`;
+        }
+
+        el.innerHTML = `<div class="sync-progress">
+          <div class="sp-header">
+            <div class="sp-title"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Syncing ${s.totalPodcasts} podcasts...</div>
+            <span style="font-size:12px;color:var(--text-dim)">${doneCount}/${s.totalPodcasts}</span>
+          </div>
+          <div class="sp-bar-track"><div class="sp-bar-fill" style="width:${pct}%"></div></div>
+          ${currentHtml}
+          ${completedHtml}
+        </div>`;
+      },
+
+      _renderQueue(el, s) {
+        const total = s.currentPhase?.total || s.episodes.size;
+        const counts = { requesting: 0, checking: 0, waiting: 0, done: 0, failed: 0, stopped: 0 };
+        for (const [, ep] of s.episodes) {
+          if (counts[ep.state] !== undefined) counts[ep.state]++;
+        }
+        const completed = counts.done + counts.failed;
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const queuedCount = Math.max(0, total - s.episodes.size);
+
+        // Group episodes by state
+        const byState = {};
+        for (const [guid, ep] of s.episodes) {
+          if (!byState[ep.state]) byState[ep.state] = [];
+          byState[ep.state].push({ guid, ...ep });
+        }
+
+        // Visible list: active states + recent done + some waiting, limited to avoid DOM bloat
+        const visibleEps = [
+          ...(byState.requesting || []),
+          ...(byState.checking || []),
+          ...(byState.failed || []),
+          ...(byState.waiting || []).slice(0, 15),
+          ...(byState.done || []).slice(-20).reverse(),
+        ];
+
+        const STATE_COLORS = {
+          requesting: 'var(--accent)', checking: 'var(--yellow)',
+          waiting: 'var(--text-dim)', done: 'var(--green)',
+          failed: 'var(--red)', stopped: 'var(--border)',
+        };
+
+        const waitingCount = counts.waiting;
+        const stoppedCount = counts.stopped;
+
+        const statPills = [
+          counts.done > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--green)"></span><span class="count">${counts.done}</span> done</span>` : '',
+          counts.requesting > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--accent)"></span><span class="count">${counts.requesting}</span> requesting</span>` : '',
+          counts.checking > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--yellow)"></span><span class="count">${counts.checking}</span> checking</span>` : '',
+          waitingCount > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--text-dim)"></span><span class="count">${waitingCount}</span> waiting</span>` : '',
+          counts.failed > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--red)"></span><span class="count">${counts.failed}</span> failed</span>` : '',
+          queuedCount > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--border)"></span><span class="count">${queuedCount}</span> queued</span>` : '',
+          stoppedCount > 0 ? `<span class="queue-stat"><span class="dot" style="background:var(--border)"></span><span class="count">${stoppedCount}</span> stopped</span>` : '',
+        ].filter(Boolean).join('');
+
+        let episodeListHtml = '';
+        if (visibleEps.length > 0) {
+          const rows = visibleEps.map(ep => {
+            const color = STATE_COLORS[ep.state] || 'var(--text-dim)';
+            return `<div class="queue-ep">
+              <span class="dot" style="background:${color}"></span>
+              <span class="ep-name" title="${esc(ep.title)}">${esc(ep.title)}</span>
+              <span class="ep-state" style="color:${color}">${ep.state}${ep.detail ? ' &middot; ' + esc(ep.detail) : ''}</span>
+            </div>`;
+          }).join('');
+          const summaryParts = [];
+          const waitingShown = Math.min((byState.waiting || []).length, 15);
+          const waitingRemaining = waitingCount - waitingShown;
+          if (waitingRemaining > 0) summaryParts.push(`${waitingRemaining} more waiting`);
+          if (queuedCount > 0) summaryParts.push(`${queuedCount} in queue`);
+          const summaryRow = summaryParts.length > 0
+            ? `<div class="queue-ep queue-ep-summary">+ ${summaryParts.join(', ')}...</div>`
+            : '';
+          episodeListHtml = `<div class="queue-episodes">${rows}${summaryRow}</div>`;
+        }
+
+        el.innerHTML = `<div class="sync-progress">
+          <div class="sp-header">
+            <div class="sp-title"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Requesting Transcripts</div>
+            <span style="font-size:12px;color:var(--text-dim)">${completed}/${total}</span>
+          </div>
+          <div class="sp-bar-track"><div class="sp-bar-fill" style="width:${pct}%;background:var(--green)"></div></div>
+          <div class="queue-stats">${statPills}</div>
+          ${episodeListHtml}
+        </div>`;
+      }
+    };
+
     async function triggerSync() {
       const btn = document.getElementById('sync-btn');
       btn.disabled = true;
       btn.textContent = 'Syncing...';
       try {
-        const result = await api('/api/sync', { method: 'POST' });
-        toast(`Sync started for ${result.count} podcast(s)`, 'success');
+        syncTracker.connect();
+        await api('/api/sync', { method: 'POST' });
+        // Button re-enabled by sync:complete SSE event
       } catch (err) {
         toast(err.message, 'error');
-      } finally {
-        setTimeout(() => {
-          btn.disabled = false;
-          btn.textContent = 'Sync All';
-          loadDashboard();
-        }, 3000);
+        btn.disabled = false;
+        btn.textContent = 'Sync All';
+        syncTracker.disconnect();
+      }
+    }
+
+    let _requestingTranscripts = false;
+
+    async function requestTranscripts(podcastId) {
+      // Update all request buttons
+      const allBtns = document.querySelectorAll('.request-btn-toggle');
+      if (_requestingTranscripts) {
+        // Stop the running queue
+        allBtns.forEach(b => { b.disabled = true; b.textContent = 'Stopping...'; });
+        try {
+          await api('/api/transcripts/stop', { method: 'POST' });
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+        // sync:complete SSE event will reset the button
+        return;
+      }
+
+      _requestingTranscripts = true;
+      allBtns.forEach(b => { b.textContent = 'Stop Requesting'; });
+      try {
+        syncTracker.connect();
+        const body = podcastId ? { podcastIds: [podcastId] } : {};
+        const resp = await api('/api/transcripts/request', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        // If nothing to process (even after auto-retry fallback), reset now
+        if (resp && resp.total === 0) {
+          _requestingTranscripts = false;
+          allBtns.forEach(b => { b.disabled = false; b.textContent = 'Request Transcripts'; });
+          syncTracker.disconnect();
+          toast('No episodes need transcript processing', 'success');
+        }
+        // Otherwise button re-enabled by sync:complete SSE event
+      } catch (err) {
+        toast(err.message, 'error');
+        _requestingTranscripts = false;
+        allBtns.forEach(b => { b.disabled = false; b.textContent = 'Request Transcripts'; });
+        syncTracker.disconnect();
+      }
+    }
+
+    let _enriching = false;
+
+    async function requestEnrichment() {
+      const allBtns = document.querySelectorAll('.enrich-btn-toggle');
+      if (_enriching) {
+        allBtns.forEach(b => { b.disabled = true; b.textContent = 'Stopping...'; });
+        try {
+          await api('/api/transcripts/enrich/stop', { method: 'POST' });
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+        return;
+      }
+
+      _enriching = true;
+      allBtns.forEach(b => { b.textContent = 'Stop Enriching'; });
+      try {
+        syncTracker.connect();
+        const resp = await api('/api/transcripts/enrich', {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+        if (resp && resp.total === 0) {
+          _enriching = false;
+          allBtns.forEach(b => { b.disabled = false; b.textContent = 'Request Enriched Data'; });
+          syncTracker.disconnect();
+          toast('All transcripts already have enriched data', 'success');
+        }
+      } catch (err) {
+        toast(err.message, 'error');
+        _enriching = false;
+        allBtns.forEach(b => { b.disabled = false; b.textContent = 'Request Enriched Data'; });
+        syncTracker.disconnect();
       }
     }
 
     // ---- Episodes viewer (inline on dashboard) ----
+    let epViewState = { podcastId: '', podcastName: '', loaded: [] };
+
+    function renderEpisodeItem(ep) {
+      let statusHtml;
+      if (ep.episodeTag === 'Promo' || ep.episodeTag === 'Repeat Episode') {
+        statusHtml = `<span class="tag tag-red">${esc(ep.episodeTag)}</span>`;
+      } else if (ep.episodeTag === 'No transcript') {
+        statusHtml = '<span class="tag tag-yellow">No transcript</span>';
+      } else if (ep.hasTranscript) {
+        statusHtml = `<button class="btn-secondary btn-sm" onclick="event.stopPropagation();openTranscript(${ep.id},'${esc(ep.title).replace(/'/g, "\\'")}')">Transcript</button>`;
+      } else if (ep.podscribeUrl) {
+        statusHtml = `<a href="${esc(ep.podscribeUrl)}" target="_blank" class="btn-secondary btn-sm" style="text-decoration:none;font-size:11px" onclick="event.stopPropagation()">Request on Podscribe</a>`;
+      } else {
+        statusHtml = '<span class="tag tag-yellow">No transcript</span>';
+      }
+      return `<div class="episode-item">
+        <div class="indicator ${ep.hasTranscript ? 'has-transcript' : 'no-transcript'}"></div>
+        <div class="info">
+          <div class="ep-title">${esc(ep.title)}</div>
+          <div class="ep-meta">${ep.publishedAt.split('T')[0]}${ep.episodeUrl ? ` &middot; <a href="${esc(ep.episodeUrl)}" target="_blank" style="color:var(--accent)">Link</a>` : ''}</div>
+        </div>
+        ${statusHtml}
+      </div>`;
+    }
+
     async function viewEpisodes(podcastId, podcastName) {
+      epViewState = { podcastId, podcastName, loaded: [] };
       try {
-        const episodes = await api(`/api/episodes?podcast=${encodeURIComponent(podcastId)}&limit=50`);
+        // Load all episodes at once (no pagination)
+        const episodes = await api(`/api/episodes?podcast=${encodeURIComponent(podcastId)}&limit=10000`);
+        epViewState.loaded = episodes;
         const container = document.getElementById('dashboard-podcasts');
 
-        const backBtn = `<div style="margin-bottom:16px">
+        const transcribed = episodes.filter(e => e.hasTranscript).length;
+        const needsTranscripts = episodes.length - transcribed;
+        const backBtn = `<div style="margin-bottom:16px;display:flex;align-items:center;flex-wrap:wrap;gap:8px">
           <button class="btn-secondary btn-sm" onclick="loadDashboard()">&larr; Back</button>
-          <span style="margin-left:8px;font-weight:600">${esc(podcastName)}</span>
-          <span class="tag tag-accent" style="margin-left:8px">${episodes.length} episodes</span>
+          <span style="font-weight:600">${esc(podcastName)}</span>
+          <span class="tag tag-accent">${episodes.length} episodes</span>
+          <span class="tag tag-green">${transcribed} transcribed</span>
+          ${needsTranscripts > 0 ? `<button class="btn-primary btn-sm request-btn-toggle" onclick="requestTranscripts('${esc(podcastId)}')" style="margin-left:auto">${_requestingTranscripts ? 'Stop Requesting' : 'Request Transcripts'}</button>` : ''}
         </div>`;
 
         if (episodes.length === 0) {
@@ -789,16 +1353,8 @@
           return;
         }
 
-        container.innerHTML = backBtn + `<div class="list-container">${
-          episodes.map(ep => `
-            <div class="episode-item">
-              <div class="indicator ${ep.hasTranscript ? 'has-transcript' : 'no-transcript'}"></div>
-              <div class="info">
-                <div class="ep-title">${esc(ep.title)}</div>
-                <div class="ep-meta">${ep.publishedAt.split('T')[0]}${ep.episodeUrl ? ` &middot; <a href="${esc(ep.episodeUrl)}" target="_blank" style="color:var(--accent)">Link</a>` : ''}</div>
-              </div>
-              ${ep.hasTranscript ? `<button class="btn-secondary btn-sm" onclick="event.stopPropagation()">Transcript</button>` : '<span class="tag tag-yellow">No transcript</span>'}
-            </div>`).join('')
+        container.innerHTML = backBtn + `<div class="list-container" id="ep-list">${
+          episodes.map(renderEpisodeItem).join('')
         }</div>
         <div style="margin-top:8px;font-size:12px;color:var(--text-dim)">
           <span class="indicator has-transcript" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green)"></span> has transcript &nbsp;
@@ -880,20 +1436,43 @@
           return;
         }
 
-        container.innerHTML = podcasts.map(p => `
-          <div class="list-item">
+        container.innerHTML = podcasts.map(p => {
+          const tagsStr = (p.tags || []).join(', ');
+          return `
+          <div class="list-item" style="flex-wrap:wrap">
             <div style="flex:1;min-width:0">
               <div class="name">${esc(p.name)}</div>
               <div class="meta">${esc(p.feedUrl)}</div>
-              <div style="margin-top:4px">
-                ${(p.tags || []).map(t => `<span class="tag tag-accent">${esc(t)}</span>`).join(' ')}
+              <div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="cursor:pointer;display:inline-flex;align-items:center;gap:4px" onclick="editTags('${esc(p.id)}', '${esc(tagsStr)}')">
+                  ${(p.tags || []).length > 0
+                    ? (p.tags || []).map(t => `<span class="tag tag-accent">${esc(t)}</span>`).join(' ')
+                    : '<span class="tag tag-accent" style="opacity:0.5">+ tags</span>'}
+                </span>
+                <span class="tag ${p.podscribeSeriesId ? 'tag-green' : 'tag-yellow'}" id="ps-tag-${esc(p.id)}" style="cursor:pointer" onclick="editPodscribeId('${esc(p.id)}', '${esc(p.podscribeSeriesId || '')}')">
+                  Podscribe: ${p.podscribeSeriesId ? '#' + esc(p.podscribeSeriesId) : 'not set'}
+                </span>
               </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center">
               <button class="btn-secondary btn-sm" onclick="syncOnePodcast('${esc(p.id)}')">Sync</button>
               <button class="btn-danger btn-sm" onclick="removePodcast('${esc(p.id)}')">Remove</button>
             </div>
-          </div>`).join('');
+            <div id="tags-edit-${esc(p.id)}" style="display:none;width:100%;margin-top:8px">
+              <div class="input-row" style="margin-bottom:0">
+                <input type="text" id="tags-input-${esc(p.id)}" value="${esc(tagsStr)}" placeholder="Tags (comma-separated, e.g. science, health)" style="flex:1">
+                <button class="btn-primary btn-sm" onclick="saveTags('${esc(p.id)}')">Save</button>
+                <button class="btn-secondary btn-sm" onclick="document.getElementById('tags-edit-${esc(p.id)}').style.display='none'">Cancel</button>
+              </div>
+            </div>
+            <div id="ps-edit-${esc(p.id)}" style="display:none;width:100%;margin-top:8px">
+              <div class="input-row" style="margin-bottom:0">
+                <input type="text" id="ps-input-${esc(p.id)}" value="${esc(p.podscribeSeriesId || '')}" placeholder="Podscribe Series ID (e.g. 188)" style="flex:1">
+                <button class="btn-primary btn-sm" onclick="savePodscribeId('${esc(p.id)}')">Save</button>
+                <button class="btn-secondary btn-sm" onclick="document.getElementById('ps-edit-${esc(p.id)}').style.display='none'">Cancel</button>
+              </div>
+            </div>
+          </div>`}).join('');
       } catch (err) {
         toast(err.message, 'error');
       }
@@ -905,6 +1484,7 @@
       const feedUrl = document.getElementById('add-feed').value.trim();
       const tagsRaw = document.getElementById('add-tags').value.trim();
       const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+      const podscribeSeriesId = document.getElementById('add-podscribe-id').value.trim() || undefined;
 
       if (!name || !id || !feedUrl) {
         toast('Name, ID, and Feed URL are required', 'error');
@@ -914,13 +1494,14 @@
       try {
         await api('/api/podcasts', {
           method: 'POST',
-          body: JSON.stringify({ id, name, feedUrl, tags }),
+          body: JSON.stringify({ id, name, feedUrl, tags, podscribeSeriesId }),
         });
         toast(`Added "${name}"`, 'success');
         document.getElementById('add-name').value = '';
         document.getElementById('add-id').value = '';
         document.getElementById('add-feed').value = '';
         document.getElementById('add-tags').value = '';
+        document.getElementById('add-podscribe-id').value = '';
         loadPodcasts();
       } catch (err) {
         toast(err.message, 'error');
@@ -938,13 +1519,71 @@
       }
     }
 
+    function editPodscribeId(podcastId, currentValue) {
+      const editDiv = document.getElementById(`ps-edit-${podcastId}`);
+      const input = document.getElementById(`ps-input-${podcastId}`);
+      if (editDiv.style.display === 'none') {
+        editDiv.style.display = 'block';
+        input.value = currentValue || '';
+        input.focus();
+      } else {
+        editDiv.style.display = 'none';
+      }
+    }
+
+    async function savePodscribeId(podcastId) {
+      const input = document.getElementById(`ps-input-${podcastId}`);
+      const value = input.value.trim();
+      try {
+        await api(`/api/podcasts/${encodeURIComponent(podcastId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ podscribeSeriesId: value || null }),
+        });
+        toast(value ? `Set Podscribe Series ID to ${value}` : 'Cleared Podscribe Series ID', 'success');
+        loadPodcasts();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
+    function editTags(podcastId, currentValue) {
+      const editDiv = document.getElementById(`tags-edit-${podcastId}`);
+      const input = document.getElementById(`tags-input-${podcastId}`);
+      if (editDiv.style.display === 'none') {
+        editDiv.style.display = 'block';
+        input.value = currentValue || '';
+        input.focus();
+      } else {
+        editDiv.style.display = 'none';
+      }
+    }
+
+    async function saveTags(podcastId) {
+      const input = document.getElementById(`tags-input-${podcastId}`);
+      const raw = input.value.trim();
+      const tags = raw ? raw.split(',').map(t => t.trim()).filter(Boolean) : [];
+      try {
+        await api(`/api/podcasts/${encodeURIComponent(podcastId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ tags }),
+        });
+        toast(tags.length > 0 ? `Tags updated: ${tags.join(', ')}` : 'Tags cleared', 'success');
+        loadPodcasts();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
     async function syncOnePodcast(id) {
       try {
+        syncTracker.connect();
         await api('/api/sync', {
           method: 'POST',
           body: JSON.stringify({ podcastId: id }),
         });
         toast(`Sync started for "${id}"`, 'success');
+        // Navigate to dashboard to see progress
+        showPage('dashboard');
       } catch (err) {
         toast(err.message, 'error');
       }
@@ -1047,6 +1686,73 @@
     }
 
     // ---- Modal ----
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return mins + ':' + String(secs).padStart(2, '0');
+    }
+
+    function renderEnrichedTranscript(words) {
+      // Group words into speaker blocks
+      const blocks = [];
+      let currentSpeaker = words[0].speaker;
+      let blockStart = words[0].startTime;
+      let blockWords = [];
+
+      for (let i = 0; i < words.length; i++) {
+        const w = words[i];
+        if (w.speaker !== currentSpeaker) {
+          const prevEnd = words[i - 1].endTime;
+          blocks.push({ speaker: currentSpeaker, start: blockStart, end: prevEnd, text: blockWords.join(' ') });
+          currentSpeaker = w.speaker;
+          blockStart = w.startTime;
+          blockWords = [];
+        }
+        blockWords.push(w.word);
+      }
+      if (blockWords.length > 0) {
+        blocks.push({ speaker: currentSpeaker, start: blockStart, end: words[words.length - 1].endTime, text: blockWords.join(' ') });
+      }
+
+      return blocks.map(b =>
+        `<div class="transcript-block">` +
+        `<div class="transcript-speaker">Speaker ${b.speaker + 1}<span class="ts">${formatTime(b.start)} – ${formatTime(b.end)}</span></div>` +
+        `<div class="transcript-text">${esc(b.text)}</div>` +
+        `</div>`
+      ).join('');
+    }
+
+    async function openTranscript(episodeId, title) {
+      const overlay = document.getElementById('modal-overlay');
+      const body = document.getElementById('modal-body');
+      document.getElementById('modal-title').textContent = title || 'Transcript';
+      body.innerHTML = '<div class="loading-row"><div class="spinner"></div> Loading transcript...</div>';
+      body.classList.remove('enriched');
+      overlay.classList.remove('hidden');
+
+      try {
+        const data = await api(`/api/transcript/${episodeId}`);
+
+        if (data.hasStructuredData) {
+          // Fetch enriched word-level data
+          try {
+            const structured = await api(`/api/transcript/${episodeId}/structured`);
+            if (structured.structured && structured.words && structured.words.length > 0) {
+              body.classList.add('enriched');
+              body.innerHTML = renderEnrichedTranscript(structured.words);
+              return;
+            }
+          } catch { /* fall through to plain text */ }
+        }
+
+        // Plain text fallback
+        body.textContent = data.transcript;
+      } catch (err) {
+        closeModal();
+        toast('Failed to load transcript: ' + err.message, 'error');
+      }
+    }
+
     function closeModal() {
       document.getElementById('modal-overlay').classList.add('hidden');
     }

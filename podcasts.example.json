@@ -28,5 +28,12 @@
     "name": "Dwarkesh Podcast",
     "feedUrl": "https://feeds.megaphone.fm/dwarkeshpatel",
     "tags": ["technology", "science", "interviews"]
+  },
+  {
+    "id": "a16z",
+    "name": "The a16z Show",
+    "feedUrl": "https://feeds.simplecast.com/JGE3yC0V",
+    "podscribeSeriesId": "188",
+    "tags": ["technology", "business", "venture-capital"]
   }
 ]
