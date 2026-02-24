@@ -18,7 +18,8 @@ import { QueryEngine } from "../agent/query-engine.js";
 import { syncAll } from "../sync.js";
 import { TranscriptQueue } from "../request-transcripts.js";
 import { EnrichmentQueue } from "../enrich-transcripts.js";
-import { getPodscribeAuthToken } from "../adapters/podscribe-auth.js";
+import { getPodscribeAuthToken, setManualAuthToken } from "../adapters/podscribe-auth.js";
+import { validateAuthToken } from "../adapters/podscribe-api-adapter.js";
 import type { PodcastConfig, SyncProgressEvent } from "../types/index.js";
 
 // ---- Constants ----
@@ -327,6 +328,23 @@ async function triggerSync(ctx: RouteContext): Promise<void> {
     .finally(() => clearOperation(ctx.state));
 }
 
+function stopSync(ctx: RouteContext): void {
+  if (!ctx.state.operation || ctx.state.operation.type !== "sync") {
+    sendError(ctx.res, "No sync operation is currently running", 404);
+    return;
+  }
+  // Sync doesn't have a graceful abort — clear state so the UI unblocks.
+  // The underlying sync will still finish in the background but new operations can start.
+  console.log("[server] Force-clearing sync operation state");
+  clearOperation(ctx.state);
+  ctx.broadcast({
+    type: "sync:complete",
+    results: [{ podcastId: "all", newEpisodes: 0, updatedEpisodes: 0, newTranscripts: 0, errors: ["Sync cancelled by user"] }],
+    durationMs: 0,
+  });
+  sendJson(ctx.res, { ok: true, message: "Sync operation cancelled" });
+}
+
 function getTopics(ctx: RouteContext): void {
   sendJson(ctx.res, loadTopics());
 }
@@ -368,8 +386,23 @@ async function requestTranscripts(ctx: RouteContext): Promise<void> {
 
   const auth = getPodscribeAuthToken();
   if (!auth) {
-    sendError(ctx.res, "No Podscribe auth token available. Login to app.podscribe.com in Chrome, or set PODSCRIBE_AUTH_TOKEN env var.", 401);
+    sendError(ctx.res, "No Podscribe auth token available. Paste a token in the auth field above, or login to app.podscribe.com in Chrome.", 401);
     return;
+  }
+
+  // Pre-validate token against Podscribe API (catches stale Chrome tokens before starting queue)
+  if (auth.source === "chrome") {
+    const episodes = ctx.db.listEpisodes("", { limit: 1 });
+    if (episodes.length > 0 && episodes[0].podscribeEpisodeId) {
+      const check = await validateAuthToken(auth.token, episodes[0].podscribeEpisodeId);
+      if (!check.valid) {
+        sendError(ctx.res,
+          `Auth token from Chrome was rejected by Podscribe (stale on disk). ` +
+          `Paste a fresh token from Chrome DevTools → Application → Local Storage → app.podscribe.com → accessToken`,
+          401);
+        return;
+      }
+    }
   }
 
   startOperation(ctx.state, "request");
@@ -497,6 +530,59 @@ function enrichmentStatus(ctx: RouteContext): void {
   });
 }
 
+function getAuthStatus(ctx: RouteContext): void {
+  const auth = getPodscribeAuthToken();
+  sendJson(ctx.res, auth
+    ? {
+      available: true,
+      source: auth.source,
+      expiresAt: auth.expiresAt.toISOString(),
+      email: auth.email,
+      expiresIn: Math.round((auth.expiresAt.getTime() - Date.now()) / 60000) + " min",
+    }
+    : {
+      available: false,
+      hint: "Paste a token from Chrome DevTools → Application → Local Storage → app.podscribe.com → accessToken",
+    },
+  );
+}
+
+async function setAuthToken(ctx: RouteContext): Promise<void> {
+  const body = await jsonBody(ctx.req);
+  const token = body.token as string;
+  if (!token) {
+    // Clear manual override
+    setManualAuthToken(null);
+    sendJson(ctx.res, { ok: true, message: "Manual token cleared" });
+    return;
+  }
+
+  const result = setManualAuthToken(token);
+  if (!result) {
+    sendError(ctx.res, "Invalid or expired token. Must be a valid JWT starting with 'eyJ'.", 400);
+    return;
+  }
+
+  // Validate against Podscribe API using a known episode
+  const episodes = ctx.db.listEpisodes("", { limit: 1 });
+  if (episodes.length > 0 && episodes[0].podscribeEpisodeId) {
+    const check = await validateAuthToken(token, episodes[0].podscribeEpisodeId);
+    if (!check.valid) {
+      setManualAuthToken(null);
+      sendError(ctx.res, `Token was rejected by Podscribe: ${check.error ?? "401 Unauthorized"}`, 401);
+      return;
+    }
+  }
+
+  sendJson(ctx.res, {
+    ok: true,
+    source: result.source,
+    expiresAt: result.expiresAt.toISOString(),
+    email: result.email,
+    expiresIn: Math.round((result.expiresAt.getTime() - Date.now()) / 60000) + " min",
+  });
+}
+
 // ---- Route table ----
 
 const routes: Route[] = [
@@ -521,6 +607,7 @@ const routes: Route[] = [
   // Sync
   { method: "GET",    pattern: /^\/api\/sync\/events$/,                   handler: syncEvents },
   { method: "POST",   pattern: /^\/api\/sync$/,                           handler: triggerSync },
+  { method: "POST",   pattern: /^\/api\/sync\/stop$/,                     handler: stopSync },
 
   // Topics
   { method: "GET",    pattern: /^\/api\/topics\/results$/,                handler: searchTopics },
@@ -537,6 +624,10 @@ const routes: Route[] = [
   { method: "POST",   pattern: /^\/api\/transcripts\/enrich$/,            handler: startEnrichment },
   { method: "POST",   pattern: /^\/api\/transcripts\/enrich\/stop$/,      handler: stopEnrichment },
   { method: "GET",    pattern: /^\/api\/transcripts\/enrich\/status$/,    handler: enrichmentStatus },
+
+  // Auth
+  { method: "GET",    pattern: /^\/api\/auth$/,                           handler: getAuthStatus },
+  { method: "POST",   pattern: /^\/api\/auth$/,                           handler: setAuthToken },
 ];
 
 // ---- Server ----

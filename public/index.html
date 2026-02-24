@@ -223,6 +223,55 @@
 
     .btn-sm { padding: 6px 12px; font-size: 12px; }
 
+    .btn-cancel-operation {
+      display: block;
+      margin: 8px auto 0;
+      padding: 6px 20px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--red);
+      background: var(--red-dim);
+      color: var(--red);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-cancel-operation:hover { background: rgba(248, 113, 113, 0.25); }
+    .btn-cancel-operation:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .auth-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .auth-banner.auth-ok { background: rgba(74, 222, 128, 0.1); color: var(--green); }
+    .auth-banner.auth-bad { background: var(--red-dim); color: var(--red); }
+    .auth-banner input {
+      flex: 1;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-family: monospace;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text);
+    }
+    .auth-banner button {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text);
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .auth-banner button:hover { background: var(--border); }
+
     .btn-icon {
       background: none;
       border: none;
@@ -757,6 +806,7 @@
             <button class="btn-secondary btn-sm enrich-btn-toggle" onclick="requestEnrichment()" id="enrich-btn" style="margin-left:4px">Request Enriched Data</button>
           </h2>
           <div id="sync-progress"></div>
+          <div id="auth-widget" style="display:none"></div>
           <div id="dashboard-podcasts">
             <div class="loading-row"><div class="spinner"></div> Loading...</div>
           </div>
@@ -899,7 +949,49 @@
     }
 
     // ---- Dashboard ----
+    async function checkAuth() {
+      const widget = document.getElementById('auth-widget');
+      if (!widget) return;
+      try {
+        const auth = await api('/api/auth');
+        if (auth.available) {
+          widget.style.display = 'block';
+          widget.innerHTML = `<div class="auth-banner auth-ok">
+            <span>&#128274;</span>
+            <span>Podscribe auth: <strong>${esc(auth.source)}</strong>${auth.email ? ` (${esc(auth.email)})` : ''} &mdash; expires in ${esc(auth.expiresIn)}</span>
+          </div>`;
+        } else {
+          widget.style.display = 'block';
+          widget.innerHTML = `<div class="auth-banner auth-bad">
+            <span>&#9888;</span>
+            <span>No auth token</span>
+            <input type="text" id="auth-token-input" placeholder="Paste access token from Chrome DevTools (eyJ...)" />
+            <button onclick="submitAuthToken()">Set Token</button>
+          </div>`;
+        }
+      } catch {
+        widget.style.display = 'none';
+      }
+    }
+
+    async function submitAuthToken() {
+      const input = document.getElementById('auth-token-input');
+      const token = input?.value?.trim();
+      if (!token) { toast('Paste a token first', 'warning'); return; }
+      try {
+        const result = await api('/api/auth', {
+          method: 'POST',
+          body: JSON.stringify({ token }),
+        });
+        toast(`Token set! Source: ${result.source}, expires in ${result.expiresIn}`, 'success');
+        checkAuth();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
+
     async function loadDashboard() {
+      checkAuth();
       try {
         const stats = await api('/api/stats');
         document.getElementById('stat-podcasts').textContent = stats.totalPodcasts;
@@ -1061,7 +1153,8 @@
             });
             break;
           case 'sync:error':
-            toast(`Sync error: ${evt.message}`, 'error');
+            toast(`Error: ${evt.message}`, 'error');
+            if (evt.message.includes('Auth') || evt.message.includes('token')) checkAuth();
             break;
         }
         this.scheduleRender();
@@ -1129,7 +1222,8 @@
           <div class="sp-bar-track"><div class="sp-bar-fill" style="width:${pct}%"></div></div>
           ${currentHtml}
           ${completedHtml}
-        </div>`;
+        </div>
+        <button class="btn-cancel-operation" onclick="cancelOperation()">Cancel</button>`;
       },
 
       _renderQueue(el, s) {
@@ -1206,7 +1300,8 @@
           <div class="sp-bar-track"><div class="sp-bar-fill" style="width:${pct}%;background:var(--green)"></div></div>
           <div class="queue-stats">${statPills}</div>
           ${episodeListHtml}
-        </div>`;
+        </div>
+        <button class="btn-cancel-operation" onclick="cancelOperation()">Cancel</button>`;
       }
     };
 
@@ -1301,6 +1396,24 @@
         _enriching = false;
         allBtns.forEach(b => { b.disabled = false; b.textContent = 'Request Enriched Data'; });
         syncTracker.disconnect();
+      }
+    }
+
+    async function cancelOperation() {
+      const btn = document.querySelector('.btn-cancel-operation');
+      if (btn) { btn.disabled = true; btn.textContent = 'Cancelling...'; }
+      try {
+        // Try stopping transcript request, enrichment, or sync — whichever is active
+        const endpoints = ['/api/transcripts/stop', '/api/transcripts/enrich/stop', '/api/sync/stop'];
+        for (const ep of endpoints) {
+          try {
+            await api(ep, { method: 'POST' });
+            return; // One succeeded — sync:complete SSE will reset UI
+          } catch { /* Not this operation type, try next */ }
+        }
+        toast('No active operation to cancel', 'warning');
+      } catch (err) {
+        toast(err.message, 'error');
       }
     }
 

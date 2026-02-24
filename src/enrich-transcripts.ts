@@ -132,7 +132,8 @@ export class EnrichmentQueue {
   stop(): void {
     log(this.verbose, `[enrich] Stop requested`);
     this.abortController.abort();
-    // Don't finish() here — let active requests drain naturally
+    this.queue.length = 0; // Drain remaining so pump() can finish once active hits 0
+    if (this.active === 0) this.finish(); // Nothing in flight — resolve immediately
   }
 
   private pump(): void {

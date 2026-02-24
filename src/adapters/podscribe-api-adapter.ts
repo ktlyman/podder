@@ -153,10 +153,16 @@ export async function requestTranscription(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         return {
           success: false,
-          error: `Auth failed (${response.status}): token may be expired. Re-login to Podscribe in Chrome and retry.`,
+          error: `Auth expired (401): token rejected by Podscribe. Re-login to Podscribe in Chrome and retry.`,
+        };
+      }
+      if (response.status === 403) {
+        return {
+          success: false,
+          error: `Forbidden (403): not permitted to request this episode. ${text.slice(0, 100)}`,
         };
       }
       return {
@@ -171,6 +177,42 @@ export async function requestTranscription(
       success: false,
       error: err instanceof Error ? err.message : String(err),
     };
+  }
+}
+
+/**
+ * Validate an auth token by making a lightweight authenticated request.
+ * Returns true if the token is accepted, false if rejected (401).
+ */
+export async function validateAuthToken(
+  authToken: string,
+  testEpisodeId: number
+): Promise<{ valid: boolean; status?: number; error?: string }> {
+  try {
+    // Use a HEAD-like approach: POST to self-hosting-request for a known episode.
+    // If the episode already has a transcript, Podscribe returns 200 (no-op).
+    // A 401 means the token is definitely bad.
+    const response = await fetch(
+      `${PODSCRIBE_API}/episode/${testEpisodeId}/self-hosting-request`,
+      {
+        method: "POST",
+        headers: {
+          "User-Agent": USER_AGENT,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+
+    if (response.status === 401) {
+      return { valid: false, status: 401, error: "Token rejected by Podscribe (401)" };
+    }
+
+    // 200, 403, or other status means the token itself is accepted
+    // (403 = permissions issue, not auth issue)
+    return { valid: true, status: response.status };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -206,10 +248,16 @@ export async function resetTranscription(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         return {
           success: false,
-          error: `Auth failed (${response.status}): token may be expired. Re-login to Podscribe in Chrome and retry.`,
+          error: `Auth expired (401): token rejected by Podscribe. Re-login to Podscribe in Chrome and retry.`,
+        };
+      }
+      if (response.status === 403) {
+        return {
+          success: false,
+          error: `Forbidden (403): not permitted to reset this episode. ${text.slice(0, 100)}`,
         };
       }
       return {

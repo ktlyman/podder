@@ -2,20 +2,21 @@
  * Podscribe authentication helper.
  *
  * Extracts and manages JWT tokens for the Podscribe API.
- * The token can be sourced from:
- *   1. PODSCRIBE_AUTH_TOKEN environment variable (takes priority)
- *   2. Chromium-based browser localStorage (Chrome, Brave, Arc on macOS)
+ * The token can be sourced from (in priority order):
+ *   1. Manual override (set at runtime via setManualAuthToken)
+ *   2. PODSCRIBE_AUTH_TOKEN environment variable
+ *   3. Chromium-based browser localStorage (Chrome, Brave, Arc on macOS)
  *
  * To get a token manually:
  *   1. Login to app.podscribe.com in Chrome
  *   2. Open DevTools → Application → Local Storage → app.podscribe.com
  *   3. Find the key containing "accessToken" under CognitoIdentityServiceProvider
  *   4. Copy the JWT value (starts with "eyJ...")
- *   5. Set: export PODSCRIBE_AUTH_TOKEN="eyJ..."
+ *   5. Paste it in the web UI auth field, or set: export PODSCRIBE_AUTH_TOKEN="eyJ..."
  *
  * Note: Tokens stored in browser LevelDB may become stale if the browser
  * has rotated them in memory without flushing to disk. In that case,
- * use PODSCRIBE_AUTH_TOKEN or refresh by visiting app.podscribe.com.
+ * use the manual override or PODSCRIBE_AUTH_TOKEN env var.
  *
  * Cognito config:
  *   User Pool: us-east-1_8D2CmA9sp
@@ -29,20 +30,53 @@ const COGNITO_USER_POOL = "us-east-1_8D2CmA9sp";
 /** Result of attempting to get a JWT */
 export interface AuthResult {
   token: string;
-  source: "env" | "chrome";
+  source: "manual" | "env" | "chrome";
   expiresAt: Date;
   email?: string;
   /** Cognito user ID (sub claim) — needed for the /api/episode/reset endpoint */
   userId?: string;
 }
 
+// ---- Manual token override ----
+
+let manualToken: string | null = null;
+
+/**
+ * Set a manual auth token override. Takes highest priority over env var and Chrome.
+ * Pass null to clear.
+ */
+export function setManualAuthToken(token: string | null): AuthResult | null {
+  manualToken = token;
+  if (!token) return null;
+  const info = parseJwtExpiry(token);
+  if (info && info.expiresAt.getTime() > Date.now()) {
+    return { token, source: "manual", ...info };
+  }
+  return null;
+}
+
+/** Check if a manual token is currently set */
+export function hasManualToken(): boolean {
+  return manualToken !== null;
+}
+
 /**
  * Get a valid Podscribe JWT access token.
- * Tries environment variable first, then browser localStorage.
+ * Tries manual override first, then environment variable, then browser localStorage.
  * Returns null if no valid token is found.
  */
 export function getPodscribeAuthToken(): AuthResult | null {
-  // 1. Try environment variable
+  // 1. Try manual override (set via web UI or API)
+  if (manualToken) {
+    const info = parseJwtExpiry(manualToken);
+    if (info && info.expiresAt.getTime() > Date.now()) {
+      return { token: manualToken, source: "manual", ...info };
+    }
+    console.warn("[auth] Manual token is expired. Trying other sources...");
+    manualToken = null; // Clear stale manual token
+  }
+
+  // 2. Try environment variable
   const envToken = process.env.PODSCRIBE_AUTH_TOKEN;
   if (envToken) {
     const info = parseJwtExpiry(envToken);
@@ -56,7 +90,7 @@ export function getPodscribeAuthToken(): AuthResult | null {
     }
   }
 
-  // 2. Try extracting from browser localStorage (macOS only)
+  // 3. Try extracting from browser localStorage (macOS only)
   if (process.platform === "darwin") {
     try {
       return extractFromBrowsers();

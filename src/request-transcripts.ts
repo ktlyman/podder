@@ -208,8 +208,9 @@ export class TranscriptQueue {
     log(this.verbose, `[queue] Stopping...`);
     this._running = false;
     this.abortController.abort();
-    // Don't resolve yet — let in-flight tasks finish naturally via checkDone()
     this.result.stillProcessing = this.queue.length + this.waiting + this.activeChecks;
+    // Drain remaining queue items so checkDone() can resolve once in-flight tasks finish
+    this.queue.length = 0;
     this.checkDone();
   }
 
@@ -310,7 +311,7 @@ export class TranscriptQueue {
         log(this.verbose, `  ↻ Resetting: "${ep.title}"`);
         const res = await resetTranscription(ep.podscribeEpisodeId!, this.auth.token, userId);
         if (!res.success) {
-          if (res.error?.includes("Auth failed")) { this.handleAuthFailure(); return; }
+          if (res.error?.includes("Auth expired")) { this.handleAuthFailure(); return; }
           this.result.failed++;
           const dt = this.elapsed(ep);
           this.result.errors.push(`Reset failed: "${ep.title}": ${res.error}`);
@@ -342,7 +343,7 @@ export class TranscriptQueue {
         // Genuinely NotStarted — request
         const res = await requestTranscription(ep.podscribeEpisodeId!, this.auth.token);
         if (!res.success) {
-          if (res.error?.includes("Auth failed")) { this.handleAuthFailure(); return; }
+          if (res.error?.includes("Auth expired")) { this.handleAuthFailure(); return; }
           this.result.failed++;
           const dt = this.elapsed(ep);
           this.result.errors.push(`Request failed: "${ep.title}": ${res.error}`);
@@ -469,6 +470,10 @@ export class TranscriptQueue {
   private handleAuthFailure(): void {
     log(this.verbose, `  ✗ Auth expired — stopping queue`);
     this.result.errors.push("Auth token expired. Re-login to Podscribe in Chrome and retry.");
+    this.emit?.({
+      type: "sync:error",
+      message: "Auth token expired. Re-login to app.podscribe.com in Chrome and retry.",
+    });
     this.stop();
   }
 
