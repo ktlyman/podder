@@ -548,6 +548,34 @@ export class PodcastDatabase {
     return rows.map(rowToEpisode);
   }
 
+  /**
+   * Get ALL episodes that have a Podscribe ID but no local transcript.
+   * Used by the download-only mode to find transcripts that may already
+   * be available on Podscribe, regardless of what status we have locally.
+   */
+  getEpisodesAwaitingDownload(podcastIds?: string[], limit?: number): Episode[] {
+    let sql = `SELECT * FROM episodes
+       WHERE transcript IS NULL
+         AND podscribe_episode_id IS NOT NULL
+         AND episode_tag IS NULL`;
+
+    const params: (string | number)[] = [];
+    if (podcastIds && podcastIds.length > 0) {
+      sql += ` AND podcast_id IN (${podcastIds.map(() => "?").join(",")})`;
+      params.push(...podcastIds);
+    }
+
+    sql += ` ORDER BY published_at DESC`;
+
+    if (limit !== undefined && Number.isFinite(limit)) {
+      sql += ` LIMIT ?`;
+      params.push(limit);
+    }
+
+    const rows = this.db.prepare(sql).all(...params) as EpisodeRow[];
+    return rows.map(rowToEpisode);
+  }
+
   /** Get episodes awaiting transcript download (Requested, Processing, Running, or bogus Done with no transcript) */
   getEpisodesInProcessing(podcastIds?: string[]): Episode[] {
     let sql = `SELECT * FROM episodes

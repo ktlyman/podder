@@ -16,7 +16,7 @@ import { getDbPath, loadPodcastConfig, getDataDir } from "../config.js";
 import { PodcastDatabase } from "../storage/database.js";
 import { QueryEngine } from "../agent/query-engine.js";
 import { syncAll } from "../sync.js";
-import { TranscriptQueue } from "../request-transcripts.js";
+import { TranscriptQueue, TranscriptDownloader } from "../request-transcripts.js";
 import { EnrichmentQueue } from "../enrich-transcripts.js";
 import { getPodscribeAuthToken, setManualAuthToken } from "../adapters/podscribe-auth.js";
 import { validateAuthToken } from "../adapters/podscribe-api-adapter.js";
@@ -90,9 +90,16 @@ interface ActiveOperation {
   startedAt: Date;
 }
 
+/** Minimal interface shared by TranscriptQueue and TranscriptDownloader */
+interface Stoppable {
+  running: boolean;
+  stop(): void;
+  getStatus(): Record<string, number>;
+}
+
 interface ServerState {
   operation: ActiveOperation | null;
-  transcriptQueue: TranscriptQueue | null;
+  transcriptQueue: Stoppable | null;
   enrichQueue: EnrichmentQueue | null;
   sseClients: Set<ServerResponse>;
 }
@@ -384,15 +391,51 @@ async function requestTranscripts(ctx: RouteContext): Promise<void> {
     return;
   }
 
-  const auth = getPodscribeAuthToken();
-  if (!auth) {
-    sendError(ctx.res, "No Podscribe auth token available. Paste a token in the auth field above, or login to app.podscribe.com in Chrome.", 401);
+  const bodyOpts = await jsonBody(ctx.req);
+  const podcastIds = bodyOpts.podcastIds as string[] | undefined;
+
+  // Step 1: Always try download mode first (no auth needed).
+  // This catches transcripts that Podscribe already has available.
+  const missing = ctx.db.getEpisodesAwaitingDownload(podcastIds);
+  if (missing.length > 0) {
+    startOperation(ctx.state, "request");
+
+    const downloader = new TranscriptDownloader(ctx.db, {
+      podcastIds,
+      concurrency: (bodyOpts.concurrency as number) ?? 10,
+      verbose: true,
+      onProgress: ctx.broadcast,
+    });
+    // Store as transcript queue so the stop button works
+    ctx.state.transcriptQueue = downloader;
+
+    sendJson(ctx.res, { ok: true, message: "Downloading available transcripts", mode: "download", ...downloader.getStatus() });
+
+    downloader.start()
+      .then((result) => {
+        console.log("Download complete:", JSON.stringify(result, null, 2));
+        ctx.broadcast({
+          type: "sync:complete",
+          results: [{ podcastId: "all", newEpisodes: 0, updatedEpisodes: 0, newTranscripts: result.downloaded, errors: result.errors }],
+          durationMs: 0,
+        });
+      })
+      .catch((err) => {
+        console.error("Download error:", err);
+        ctx.broadcast({ type: "sync:error", message: String(err) });
+      })
+      .finally(() => clearOperation(ctx.state));
     return;
   }
 
-  // Pre-validate token against Podscribe API (catches stale/truncated Chrome tokens).
-  // IMPORTANT: Use an episode that needs transcription — Podscribe may not check auth
-  // for already-transcribed episodes (returning 200 without verifying the token).
+  // Step 2: No missing transcripts to download — try auth-requiring request mode
+  const auth = getPodscribeAuthToken();
+  if (!auth) {
+    sendError(ctx.res, "All available transcripts are downloaded. To request new ones, paste a Podscribe auth token above.", 401);
+    return;
+  }
+
+  // Pre-validate token against Podscribe API
   if (auth.source === "chrome") {
     const needsWork = ctx.db.getEpisodesNeedingTranscriptRequest();
     const testEp = needsWork.find(ep => ep.podscribeEpisodeId) ?? null;
@@ -403,8 +446,7 @@ async function requestTranscripts(ctx: RouteContext): Promise<void> {
       if (!check.valid) {
         sendError(ctx.res,
           `Auth token from Chrome is stale (rejected by Podscribe). ` +
-          `Paste a fresh token using the auth field above. ` +
-          `(Chrome DevTools → Application → Local Storage → app.podscribe.com → accessToken)`,
+          `Paste a fresh token using the auth field above.`,
           401);
         return;
       }
@@ -412,11 +454,10 @@ async function requestTranscripts(ctx: RouteContext): Promise<void> {
   }
 
   startOperation(ctx.state, "request");
-  const bodyOpts = await jsonBody(ctx.req);
 
   let retry = bodyOpts.retry as boolean | undefined;
   let queue = new TranscriptQueue(ctx.db, auth, {
-    podcastIds: bodyOpts.podcastIds as string[] | undefined,
+    podcastIds,
     maxRequests: bodyOpts.maxRequests as number | undefined,
     concurrency: bodyOpts.concurrency as number | undefined,
     checkDelayMs: bodyOpts.checkDelayMs as number | undefined,
@@ -427,13 +468,20 @@ async function requestTranscripts(ctx: RouteContext): Promise<void> {
 
   if (queue.getStatus().total === 0 && !retry) {
     queue = new TranscriptQueue(ctx.db, auth, {
-      podcastIds: bodyOpts.podcastIds as string[] | undefined,
+      podcastIds,
       retry: true,
       verbose: true,
       onProgress: ctx.broadcast,
     });
     retry = true;
   }
+
+  if (queue.getStatus().total === 0) {
+    clearOperation(ctx.state);
+    sendJson(ctx.res, { ok: true, message: "Nothing to process — all transcripts are up to date", mode: "none", total: 0 });
+    return;
+  }
+
   ctx.state.transcriptQueue = queue;
 
   const mode = retry ? "retry" : "request";

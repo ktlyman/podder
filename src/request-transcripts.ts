@@ -543,6 +543,238 @@ export class TranscriptQueue {
 }
 
 /**
+ * Auth-free transcript downloader.
+ *
+ * Scans ALL episodes with a Podscribe ID but no local transcript, checks the
+ * public status API, and downloads any that are already "Done". No auth token
+ * is needed — this uses only public Podscribe endpoints.
+ *
+ * Use this when Podscribe already has transcripts available but we haven't
+ * downloaded them locally (e.g. after a failed auth-required run, or when
+ * the podcast was added to Podscribe externally).
+ */
+export class TranscriptDownloader {
+  private db: PodcastDatabase;
+  private emit: SyncProgressCallback | undefined;
+  private verbose: boolean;
+  private concurrency: number;
+  private delayMs: number;
+
+  private queue: Episode[] = [];
+  private total = 0;
+  private active = 0;
+  private downloaded = 0;
+  private skipped = 0;
+  private failed = 0;
+  private errors: string[] = [];
+  private completedDurations: number[] = [];
+  private startTimes = new Map<string, number>();
+
+  private abortController = new AbortController();
+  private donePromise: Promise<RequestTranscriptsResult> | null = null;
+  private doneResolve: ((r: RequestTranscriptsResult) => void) | null = null;
+  private _running = false;
+
+  constructor(
+    db: PodcastDatabase,
+    options: {
+      podcastIds?: string[];
+      concurrency?: number;
+      delayMs?: number;
+      verbose?: boolean;
+      onProgress?: SyncProgressCallback;
+    } = {}
+  ) {
+    this.db = db;
+    this.emit = options.onProgress;
+    this.verbose = options.verbose ?? true;
+    this.concurrency = options.concurrency ?? 10;
+    this.delayMs = options.delayMs ?? 200; // Gentle rate limit on public API
+
+    this.queue = db.getEpisodesAwaitingDownload(options.podcastIds);
+    this.total = this.queue.length;
+  }
+
+  get running(): boolean { return this._running; }
+
+  getStatus() {
+    return {
+      queued: this.queue.length,
+      active: this.active,
+      done: this.downloaded,
+      skipped: this.skipped,
+      failed: this.failed,
+      total: this.total,
+    };
+  }
+
+  start(): Promise<RequestTranscriptsResult> {
+    if (this.donePromise) return this.donePromise;
+
+    this._running = true;
+    this.donePromise = new Promise((resolve) => { this.doneResolve = resolve; });
+
+    log(this.verbose, `[download] ${this.total} episodes to check (concurrency: ${this.concurrency}, no auth needed)`);
+
+    if (this.total === 0) {
+      log(this.verbose, `[download] Nothing to do`);
+      this.finish();
+      return this.donePromise;
+    }
+
+    this.emit?.({
+      type: "phase:start",
+      podcastId: "all",
+      phase: "request",
+      total: this.total,
+      message: `Downloading ${this.total} available transcripts`,
+    });
+
+    this.pump();
+    return this.donePromise;
+  }
+
+  stop(): void {
+    if (!this._running) return;
+    log(this.verbose, `[download] Stopping...`);
+    this._running = false;
+    this.abortController.abort();
+    this.queue.length = 0;
+    if (this.active === 0) this.finish();
+  }
+
+  private pump(): void {
+    if (this.abortController.signal.aborted && this.active === 0) {
+      this.finish();
+      return;
+    }
+
+    while (this.active < this.concurrency && this.queue.length > 0) {
+      if (this.abortController.signal.aborted) break;
+      const ep = this.queue.shift()!;
+      this.active++;
+      this.processEpisode(ep).finally(() => {
+        this.active--;
+        this.emitProgress();
+        if (this.delayMs > 0 && !this.abortController.signal.aborted) {
+          setTimeout(() => this.pump(), this.delayMs);
+        } else {
+          this.pump();
+        }
+      });
+    }
+
+    if (this.active === 0 && this.queue.length === 0) {
+      this.finish();
+    }
+  }
+
+  private async processEpisode(ep: Episode): Promise<void> {
+    const start = Date.now();
+    this.setEpisodeState(ep, "checking");
+
+    try {
+      const detail = await fetchEpisodeDetail(ep.podscribeEpisodeId!);
+      const status = detail.transcription?.status ?? "none";
+      const tid = detail.transcription?.id;
+
+      // Update local status
+      if (status !== "none") {
+        this.db.setPodscribeTranscriptStatuses([
+          { podcastId: ep.podcastId, guid: ep.guid, status, transcriptionId: tid ?? undefined },
+        ]);
+      }
+
+      if (status === "Done" && tid) {
+        const result = await fetchTranscriptText(ep.podscribeEpisodeId!, tid);
+        if (result && result.text.length > 0) {
+          this.db.setTranscript(ep.podcastId, ep.guid, result.text, "podscribe-api", result.words);
+          this.downloaded++;
+          const ms = Date.now() - start;
+          this.completedDurations.push(ms);
+          this.setEpisodeState(ep, "done", `${result.text.length} chars, ${formatDuration(ms)}`);
+          log(this.verbose, `  ✓ Downloaded: "${ep.title}" (${result.text.length} chars) [${formatDuration(ms)}]`);
+          return;
+        }
+      }
+
+      // Not available yet — skip silently
+      this.skipped++;
+      this.setEpisodeState(ep, "failed", `${status} — not available`);
+      // Only log non-Done statuses that aren't common
+      if (status !== "Done" && status !== "NotStarted" && status !== "none") {
+        log(this.verbose, `  ⏳ Skipped: "${ep.title}" — ${status}`);
+      }
+    } catch (err) {
+      this.failed++;
+      const msg = err instanceof Error ? err.message : String(err);
+      this.errors.push(`"${ep.title}": ${msg}`);
+      this.setEpisodeState(ep, "failed", msg);
+      log(this.verbose, `  ✗ Error: "${ep.title}" — ${msg}`);
+    }
+  }
+
+  private setEpisodeState(ep: Episode, state: EpisodeQueueState, detail?: string): void {
+    this.emit?.({
+      type: "episode:status",
+      podcastId: ep.podcastId,
+      guid: ep.guid,
+      title: ep.title,
+      state,
+      detail,
+    });
+  }
+
+  private emitProgress(): void {
+    const completed = this.downloaded + this.skipped + this.failed;
+    this.emit?.({
+      type: "phase:progress",
+      podcastId: "all",
+      phase: "request",
+      completed,
+      total: this.total,
+      message: `${this.downloaded} downloaded, ${this.skipped} not available, ${this.failed} errors`,
+    });
+  }
+
+  private finish(): void {
+    if (!this._running && !this.doneResolve) return;
+    this._running = false;
+
+    const timings = this.completedDurations.length > 0
+      ? computeTimingStats(this.completedDurations)
+      : undefined;
+
+    log(this.verbose,
+      `\n[download] Done: ${this.downloaded} downloaded, ${this.skipped} not available, ${this.failed} errors`
+    );
+    if (timings && this.completedDurations.length > 0) {
+      log(this.verbose,
+        `[download] Timing (${this.completedDurations.length} episodes): min ${formatDuration(timings.minMs)}, max ${formatDuration(timings.maxMs)}, avg ${formatDuration(timings.avgMs)}, median ${formatDuration(timings.medianMs)}`
+      );
+    }
+
+    this.emit?.({
+      type: "phase:complete",
+      podcastId: "all",
+      phase: "request",
+      summary: `${this.downloaded} downloaded, ${this.skipped} not available`,
+    });
+
+    const result: RequestTranscriptsResult = {
+      requested: 0,
+      downloaded: this.downloaded,
+      failed: this.failed,
+      stillProcessing: this.skipped,
+      errors: this.errors,
+      timings,
+    };
+    this.doneResolve?.(result);
+    this.doneResolve = null;
+  }
+}
+
+/**
  * Convenience wrapper — creates a TranscriptQueue, starts it, and returns
  * a promise. Preserves CLI compatibility with the old batch interface.
  */
