@@ -390,15 +390,21 @@ async function requestTranscripts(ctx: RouteContext): Promise<void> {
     return;
   }
 
-  // Pre-validate token against Podscribe API (catches stale Chrome tokens before starting queue)
+  // Pre-validate token against Podscribe API (catches stale/truncated Chrome tokens).
+  // IMPORTANT: Use an episode that needs transcription — Podscribe may not check auth
+  // for already-transcribed episodes (returning 200 without verifying the token).
   if (auth.source === "chrome") {
-    const episodes = ctx.db.listEpisodes("", { limit: 1 });
-    if (episodes.length > 0 && episodes[0].podscribeEpisodeId) {
-      const check = await validateAuthToken(auth.token, episodes[0].podscribeEpisodeId);
+    const needsWork = ctx.db.getEpisodesNeedingTranscriptRequest();
+    const testEp = needsWork.find(ep => ep.podscribeEpisodeId) ?? null;
+    if (testEp) {
+      console.log(`[auth] Pre-validating Chrome token against episode ${testEp.podscribeEpisodeId}...`);
+      const check = await validateAuthToken(auth.token, testEp.podscribeEpisodeId!);
+      console.log(`[auth] Pre-validation result: ${check.valid ? "OK" : "FAILED"} (status ${check.status})`);
       if (!check.valid) {
         sendError(ctx.res,
-          `Auth token from Chrome was rejected by Podscribe (stale on disk). ` +
-          `Paste a fresh token from Chrome DevTools → Application → Local Storage → app.podscribe.com → accessToken`,
+          `Auth token from Chrome is stale (rejected by Podscribe). ` +
+          `Paste a fresh token using the auth field above. ` +
+          `(Chrome DevTools → Application → Local Storage → app.podscribe.com → accessToken)`,
           401);
         return;
       }
@@ -563,13 +569,15 @@ async function setAuthToken(ctx: RouteContext): Promise<void> {
     return;
   }
 
-  // Validate against Podscribe API using a known episode
-  const episodes = ctx.db.listEpisodes("", { limit: 1 });
-  if (episodes.length > 0 && episodes[0].podscribeEpisodeId) {
-    const check = await validateAuthToken(token, episodes[0].podscribeEpisodeId);
+  // Validate against Podscribe API using an episode that needs transcription
+  // (Podscribe may not check auth for already-transcribed episodes)
+  const needsWork = ctx.db.getEpisodesNeedingTranscriptRequest();
+  const testEp = needsWork.find(ep => ep.podscribeEpisodeId) ?? null;
+  if (testEp) {
+    const check = await validateAuthToken(token, testEp.podscribeEpisodeId!);
     if (!check.valid) {
       setManualAuthToken(null);
-      sendError(ctx.res, `Token was rejected by Podscribe: ${check.error ?? "401 Unauthorized"}`, 401);
+      sendError(ctx.res, `Token was rejected by Podscribe: ${check.error ?? "401 Unauthorized"}. Make sure you copied the full accessToken value.`, 401);
       return;
     }
   }

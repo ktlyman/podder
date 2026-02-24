@@ -117,6 +117,32 @@ function parseJwtExpiry(
 }
 
 /**
+ * Validate JWT structural integrity.
+ * Catches truncated tokens from Chrome LevelDB extraction where the
+ * header+payload parse fine but the signature is incomplete.
+ * A valid RS256 JWT signature is ~342 chars base64url.
+ */
+function isStructurallyValidJwt(token: string): boolean {
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+
+  // Each part must be valid base64url
+  const b64re = /^[A-Za-z0-9_-]+$/;
+  for (const part of parts) {
+    if (!part || !b64re.test(part)) return false;
+  }
+
+  // RS256 signature should be ~342 chars (256 bytes base64url).
+  // Accept ≥100 as a safety margin — truncated tokens are usually much shorter.
+  if (parts[2].length < 100) {
+    console.warn(`[auth] JWT signature too short (${parts[2].length} chars) — likely truncated`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Search Chromium-based browsers' LevelDB for Podscribe tokens.
  * Checks Chrome (all profiles), Brave, and Arc.
  */
@@ -168,10 +194,11 @@ function extractFromBrowsers(): AuthResult | null {
             Buffer.from(parts[1], "base64url").toString()
           );
 
-          // Must be a Podscribe Cognito access token
+          // Must be a Podscribe Cognito access token with valid structure
           if (
             payload.iss?.includes(COGNITO_USER_POOL) &&
-            payload.token_use === "access"
+            payload.token_use === "access" &&
+            isStructurallyValidJwt(line)
           ) {
             const exp = payload.exp ?? 0;
             if (exp > bestExp && exp * 1000 > Date.now()) {
